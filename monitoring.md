@@ -56,7 +56,19 @@ After we have installed VirtualBox and Vagrant we can create our box with
 
     $ vagrant init ubuntu/trusty64
 
-This will create a Vagrantfile with a basic configuration.
+This will create a Vagrantfile with a basic configuration. We supplement the
+Vagrantfile as follows
+
+    config.vm.hostname = "nagios"
+    config.vm.network  = "forwarded_port", guest: 80, host: 4567
+    config.vm.network  = "private_network", ip: "192.168.100.100"
+    config.vm.provider "virtualbox" do |vb|
+      vb.memory = 2048
+      vb.cpus   = 2
+    end
+
+Note: The IP address 192.168.100 must not match with your local Network.
+vb.memory and vb.cpus you can change to what is possible with your machine.
 
 ## Create and start the box
 `vagrant up` is the command to create and start up the box. The first time
@@ -80,8 +92,8 @@ Nagios we will install Puppet.
 Puppet is available through Ubuntu's repository as _puppet_ and _puppetmaster_.
 In order to use the client/server installation we will install _puppet_ on the
 client machine and _puppetmaster_ on the server machine. Our client is where we
-install Nagios and our server is a different machine. In the followin our 
-server is called `uranus`.
+install Nagios and our Puppet server is a different machine. In the following 
+our Puppet server is called `uranus`.
 
 It is best to have the same version for both puppet and puppetmaster. But at 
 least the puppetmaster has to have the version number of puppet client.
@@ -393,7 +405,7 @@ and in `/etc/puppet/modules/apache/manifests/service.pp`
 As a final step we have to add _apache_ to our `/etc/puppet/manifests/site.pp`
 
     node 'nagios.fritz.box' {
-      include ::nagios
+      include ::nagios::server
       include ::apache
     }
 
@@ -624,5 +636,78 @@ In order the clients get recognized we have to add them to
 Now we install NRPE on the Nagios server with
 
     $ sudo puppet agent --test
+
+The same we have to do on the remote host, that is _uranus_ which happens 
+to be the same machine as our Puppet server. In this case we will use
+`puppet apply` instead using `sudo puppet agent --test`
+
+    $ sudo puppet apply /etc/puppet/manifests/site.pp
+    Notice: Compiled catalog for uranus.fritz.box in environment production in 
+    0.08 seconds
+    Info: Applying configuration version '1439810753'
+    Notice: /Stage[main]/Nagios::Client::Install/Package[nagios-plugins]/\
+    ensure: ensure changed 'purged' to 'present'
+    Notice: /Stage[main]/Nagios::Client::Install/Package[nagios-nrpe-server]/\
+    ensure: ensure changed 'purged' to 'present'
+    Notice: Finished catalog run in 123.44 seconds
+
+If we run `dpkg --get-selections | grep nagios` we will see that the packages
+have been installed
+
+    $ dpkg --get-selections | grep nagios
+    nagios-nrpe-server                              install
+    nagios-plugins                                  install
+    nagios-plugins-basic                            install
+    nagios-plugins-common                           install
+    nagios-plugins-standard                         install
+
+Now that we have NRPE installed we will find a configuration file `nrpe.cfg`in 
+`/etc/nagios/nrpe.cfg`. We copy that file to our Puppet files folder
+
+    $ sudo cp /etc/nagios/nrpe.cfg /etc/puppet/modules/nagios/files/
+
+In that file we can tell NRPE which hosts are allowed to access the services.
+Make following change to `nrpe.cfg`
+
+    allowed_hosts=192.168.178.81
+
+This is the IP address of our host machine. Even though we are connecting from
+the nagios server, that is the Vagrantbox, the hosts IP address is forwarded. In
+order to make changes available we have to add a _config_ class to 
+`/etc/puppet/modules/nagios/manifests/client/config.pp
+
+    class nagios::client::config {
+      file { "/etc/nagios/nrpe.cfg":
+        source => "puppet:///modules/nagios/nrpe.cfg"
+        owner  => root,
+        group  => root,
+        mode   => 644,
+      }
+      service { "nagios-nrpe-server":
+        ensure    => true,
+        enable    => true,
+        subscribe => File["/etc/nagios/nrpe.cfg"]
+      }
+    }
+
+We also have to supplement `/etc/puppet/modules/nagios/manifests/client.pp`
+
+    class nagios::client {
+      class { '::nagios::client::install': } ->
+      class { '::nagios::client::config':  } ->
+      Class['nagios::client']
+    }
+
+To get everything in place we run
+
+    $ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
+
+Now _uranus_ is listening for requests from our Nagios server. To see whether
+we can retrieve information from _uranus_ we issue following command
+
+    nagios$ /usr/lib/nagios/plugins/check_nrpe -H uranus
+    NRPE v2.15
+
+The string _NRPE v2.15_ indicates that it is working.
 
 
