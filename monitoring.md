@@ -559,7 +559,7 @@ The mercury.cfg looks like this
        check_command       check_ssh
      }
 
-The uranus.cfg has the same content
+The uranus.cfg has the same content except for the host
 
     define host {
       use       generic-host
@@ -737,8 +737,8 @@ We now add these to `uranus.cfg`. Following we show how to use the
 `check_nrpe_1arg` command
 
     define service {
-      use               generic-service
-      host_name         uranus
+      use                 generic-service
+      host_name           uranus
       service_description Disk Space
       check_command       check_nrpe_1arg!check_all_disks
     }
