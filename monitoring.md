@@ -204,45 +204,46 @@ company name _sugaryourcoffe_ but for the module we need to have the pure
 nagios name in order this to be working.
 
 The scaffolding of our module has created a bare `nagios/manifests/init.pp` file
-we now extend with
+we rename to 'nagios/manifests/server.pp` and extend with
 
-    class nagios {
-      class { '::nagios::install`: } ->
-      class { '::nagios::config':  } ->
-      class { '::nagios::service': } ->
-      Class['nagios']
+    class nagios::server {
+      class { '::nagios::server::install`: } ->
+      class { '::nagios::server::config':  } ->
+      class { '::nagios::server::service': } ->
+      Class['nagios::server']
     }
 
 Now for each of the classes _install_, _config_, and _service_ we create a
-pp-file
+pp-file in `nagios/manifests/server/`. The directory doesn't exist so we will
+created with `sudo mkdir /etc/puppet/modules/nagios/manifests/server`
 
-    class nagios::install {
+    class nagios::server::install {
       package { "nagios3":
         ensure => present,
       }
     }
 
-   class nagios::config {
-      # content pending 
-   }
+    class nagios::server::config {
+       # content pending 
+    }
 
-   class nagios::service {
-     service { "nagios3":
-       ensure     => running,
-       hasrestart => true,
-       enable     => true,
-       hasstatus  => true,
-       restart    => "/etc/init.d/nagios3 reload",
-       require    => Class["nagios::install"]
-     }
-   }
+    class nagios::server::service {
+      service { "nagios3":
+        ensure     => running,
+        hasrestart => true,
+        enable     => true,
+        hasstatus  => true,
+        restart    => "/etc/init.d/nagios3 reload",
+        require    => Class["nagios::server::install"]
+      }
+    }
 
 
-A final step we supplement the node definition in 
+In a final step we supplement the node definition in 
 `/etc/puppet/manifests/site.pp` with
 
     node 'nagios.fritz.box' {
-      include ::nagios
+      include ::nagios::server
     }
 
 When we are done with the basic configuration we can run puppet in order
@@ -256,8 +257,8 @@ error message that Ubuntu's repository server cannot be found.
     Info: Retrieving plugin
     Info: Caching catalog for nagios.fritz.box
     Info: Applying configuration version '1439316179'
-    Notice: /Stage[main]/Nagios:Package/Package[nagios3]/ensure: ensure \
-    changed 'purged' to 'present'
+    Notice: /Stage[main]/Nagios::Server::Install/Package[nagios3]/ensure: \
+    ensure changed 'purged' to 'present'
     Notice: Finished catalog run in 94.92 seconds
 
 We can check that Nagios is installed with
@@ -333,7 +334,7 @@ and copy it to the files directory of our Puppet nagios module
 Now we have all files in place and we are ready to fill in the content to our 
 '/etc/puppet/modules/nagios/manifests/config.pp' file.
 
-    class nagios::config {
+    class nagios::server::config {
       file { "/etc/nagios3/apache2.conf":
         source => "puppet:///modules/nagios/apache2.conf",
         owner  => root,
@@ -346,14 +347,14 @@ Now we have all files in place and we are ready to fill in the content to our
         owner  => www-data,
         group  => nagios,
         mode   => 640,
-        require => Class["nagios::install"],
+        require => Class["nagios::server::install"],
       }
     }
 
 Even though Nagios is taking care of installing Apache 2 we still have to
 manage Apache 2 separately with Puppet because we need the _apache::service_
 directive when we load the file `/etc/nagios3/apache2.conf` with the above
-_nagios::config_ directive.
+_nagios::server::config_ directive.
 
 On our Puppet server we create an Apache 2 module in `/etc/puppet/modules/`
 
@@ -439,14 +440,14 @@ manage that file with Puppet. To do so we first copy the file into the
 To manage `nagios.cfg` we add following to 
 `/etc/puppet/modules/manifests/config.pp`
 
-    class nagios::config {
+    class nagios::server::config {
       file { "/etc/nagios3/nagios.cfg":
         source  => "puppet:///modules/nagios/nagios.cfg",
         owner   => nagios
         group   => nagios
         mode    => 644,
-        require => Class["nagios::install"],
-        notify  => [Class["apache::service"], Class["nagios::service"]]
+        require => Class["nagios::server::install"],
+        notify  => [Class["apache::service"], Class["nagios::server::service"]]
       }
     }
 
@@ -461,19 +462,19 @@ uses the file `/var/nagios3/rw/nagios.cmd`. In order Nagios can change that
 file we need to set the permission to execute for user _www-data_ who has to be
 in the group _nagios_. This we do in an additional file resource and an user
 resource. We add these resources to 
-`/etc/puppet/modules/nagios/manifests/config.pp`
+`/etc/puppet/modules/nagios/manifests/server/config.pp`
 
     file { "/var/lib/nagios3/rw":
       ensure  => directory,
       owner   => nagios,
       group   => www-data,
       mode    => 710,
-      require => Class["nagios::install"],
+      require => Class["nagios::server::install"],
     }
     user { "www-data":
       groups  => "nagios",
       notify  => Class["apache::service"],
-      require => Class["nagios::install"],
+      require => Class["nagios::server::install"],
     }
 
 Now back on the nagios server we issue
@@ -507,8 +508,8 @@ to manage the configuration files.
       group   => nagios,
       mode    => 0644,
       recurse => true,
-      notify  => Class["nagios::service"],
-      require => Class["nagios::install"],
+      notify  => Class["nagios::server::service"],
+      require => Class["nagios::server::install"],
     }
     file { "/etc/nagios3/conf.d/localhost_nagios2.cfg":
       ensure => absent,
@@ -586,9 +587,10 @@ host and returns the results to our Nagios server. To get this up we have to
 install the NRPE plugin on our Nagios server and on our remote hosts.
 
 On our Puppet server we extend 
-`/etc/puppet/modules/nagios/manifests/install.cfg` with _nagios-nrpe-plugin_
+`/etc/puppet/modules/nagios/manifests/server/install.cfg` with 
+_nagios-nrpe-plugin_
 
-    class nagios::install {
+    class nagios::server::install {
       package { ["nagios3", "nagios-nrpe-plugin"]:
         ensure => present,
       }
@@ -599,9 +601,28 @@ install NRPE. We create a file `/etc/puppet/modules/nagios/manifests/client.pp`
 and add following content
 
     class nagios::client {
+      class { '::nagios::client::install': } ->
+      Class['nagios::client']
+    }
+
+and in the directory `/etc/puppet/modules/nagios/manifests/client/` we add the
+_install.pp_ manifest
+
+    class nagios::client::install {
       package { ["nagios-nrpe-server", "nagios-plugins"]:
         ensure => present,
       }
     }
+
+In order the clients get recognized we have to add them to 
+`/etc/puppet/manifests/site.pp`
+
+    node 'uranus.fritz.box' {
+      include ::nagios::client
+    }
+
+Now we install NRPE on the Nagios server with
+
+    $ sudo puppet agent --test
 
 
