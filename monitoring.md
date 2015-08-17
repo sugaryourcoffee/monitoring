@@ -708,6 +708,18 @@ we can retrieve information from _uranus_ we issue following command
     nagios$ /usr/lib/nagios/plugins/check_nrpe -H uranus
     NRPE v2.15
 
-The string _NRPE v2.15_ indicates that it is working.
+The string _NRPE v2.15_ indicates that it is working. Now we are ready to add
+additional services to our 
+`/etc/puppet/modules/nagios/files/conf.d/hosts/uranus.cfg`. We want to monitor
+services shown in the table below.
+
+Service          | Description
+---------------- | ------------------------------
+Current users    | Check count of users
+Current load     | Check system load
+Disk space       | Check disk space
+SSH              | Check SSH connection
+Zombie processes | Check count zombie processes
+Total processes  | Check count of total processes
 
 
