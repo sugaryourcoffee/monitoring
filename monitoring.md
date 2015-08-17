@@ -713,13 +713,33 @@ additional services to our
 `/etc/puppet/modules/nagios/files/conf.d/hosts/uranus.cfg`. We want to monitor
 services shown in the table below.
 
-Service          | Description
----------------- | ------------------------------
-Current users    | Check count of users
-Current load     | Check system load
-Disk space       | Check disk space
-SSH              | Check SSH connection
-Zombie processes | Check count zombie processes
-Total processes  | Check count of total processes
+Service          | Description                    | Command
+---------------- | ------------------------------ | ------------------
+Current users    | Check count of users           | check_users
+Current load     | Check system load              | check_load
+Disk space       | Check disk space               | check_all_disks
+SSH              | Check SSH connection           | check_ssh
+Zombie processes | Check count zombie processes   | check_zombie_procs
+Total processes  | Check count of total processes | check_total_procs
 
+These checks are hard coded to `/etc/ngios/nrpe.cfg`. We will use all of these
+checks except _Disk Space_ which we want to tweak to check all disks. Change
+following line in '/etc/puppet/modules/nagios/files/nrpe.cfg`
+
+    command[check_disk]=/usr/lib/nagios/plugins/check_disk -w 20% -c 10% \
+    -p /dev/hda1
+
+to
+
+    command[check_all_disks]=/usr/lib/nagios/plugins/check_disk -w 20% -c 10% -e
+
+We now add these to `uranus.cfg`. Following we show how to use the 
+`check_nrpe_1arg` command
+
+    define service {
+      use               generic-service
+      host_name         uranus
+      service_description Disk Space
+      check_command       check_nrpe_1arg!check_all_disks
+    }
 
