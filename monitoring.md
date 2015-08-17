@@ -517,14 +517,16 @@ to manage the configuration files.
 Planning for monitoring
 -----------------------
 Now we have setup Nagios and are ready for planning which hosts to monitor. We
-have a prodcution server _mercury_, and a staging server _uranus_. In the 
-following table the applications are shown that we want to monitor.
+have a prodcution server _mercury_, and a staging server _uranus_. We also have
+a dynamic IP address that is managed over dyndns. In the following table the 
+applications are shown that we want to monitor.
 
-Server  | Application           | Hosts file
---------+-----------------------+-----------
-mercury | Secondhand production | mercury.cfg
-uranus  | Secondhand staging    | uranus.cfg
-uranus  | Apptrack              | 
+Server/URL     | Application           | Hosts file
+-------------- | --------------------- | -----------
+mercury        | Secondhand production | mercury.cfg
+uranus         | Secondhand staging    | uranus.cfg
+uranus         | Apptrack              | uranus.cfg
+syc.dyndns.org | mercury and uranus    | dyndns.cfg
 
 For each of the servers we need a configuration file that we save on our Puppet
 server uranus in `/etc/puppet/modules/nagios/files/conf.d/hosts`
@@ -557,6 +559,49 @@ The uranus.cfg has the same content
       host_name           uranus
       service_description SSH
       check_command       check_ssh
+    }
+
+Finally the dyndns.cfg
+
+    define host {
+      use       generic-host
+      host_name syc.dyndns.org
+      alias     syc.dyndns.org
+      address   syc.dyndns.org
+    }
+    define service {
+      use                 generic-service
+      host_name           syc.dyndns.org
+      service-description PING
+      check_command       check-host-alive
+    }
+
+The servers _uranus_, _mercury_ and _syc.dyndns.org_ are so called remote hosts.
+We can check on remote hosts only services that are accessible from outside.
+The services we check here is _SSH_ and _PING_. But we also need to check
+internal services like processes, users and disk space, just to name a few. In
+order to also monitor these internal services we need to use a service called
+_NRPE_ (Nagios Remote Plugins Executor). NRPE runs the checks on the remote 
+host and returns the results to our Nagios server. To get this up we have to
+install the NRPE plugin on our Nagios server and on our remote hosts.
+
+On our Puppet server we extend 
+`/etc/puppet/modules/nagios/manifests/install.cfg` with _nagios-nrpe-plugin_
+
+    class nagios::install {
+      package { ["nagios3", "nagios-nrpe-plugin"]:
+        ensure => present,
+      }
+    }
+
+For our remote hosts _uranus_ and _mercury_ we create Puppet manifests to 
+install NRPE. We create a file `/etc/puppet/modules/nagios/manifests/client.pp`
+and add following content
+
+    class nagios::client {
+      package { ["nagios-nrpe-server", "nagios-plugins"]:
+        ensure => present,
+      }
     }
 
 
