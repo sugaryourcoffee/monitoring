@@ -743,3 +743,35 @@ We now add these to `uranus.cfg`. Following we show how to use the
       check_command       check_nrpe_1arg!check_all_disks
     }
 
+Next we want to check up _Phusion Passenger_. For that to do we write a Bash
+script that is using _passenger_status_ that provides process information. We 
+put the script into `/usr/lib/nagios/plugins/check_passenger`.
+
+The usage of passenger is
+
+    $ check_passenger [options] [app]
+
+The options are explained in the table below.
+
+Flag |             | Parameter | Description
+---- | ----------- | --------- | ------------------------------
+     |             |           | Print passenger_status
+-r   | --requests  | APP       | Requests in queue for APP
+-l   | --load      | APP       | CPU load for APP
+-m   | --memory    | APP       | Memory usage for APP
+-a   | --access    | APP       | Accesses of APP during uptime
+-u   | --uptime    | APP       | Uptime of APP
+-f   | --frequency | APP       | Access frequency within uptime
+-s   | --sessions  | APP       | Sessions of APP
+-w   | --warning   | N         | Warning threashold
+-c   | --critical  | N         | Critical theashold
+
+Example of invoking `check_passenge`
+
+    $ check_passenger -r -w 50 -c 100 secondhand
+
+The script is shown below.
+
+    #!/usr/bin/env bash
+
+
