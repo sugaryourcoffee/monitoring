@@ -766,7 +766,7 @@ Flag |             | Parameter | Description
 -w   | --warning   | N         | Warning threashold
 -c   | --critical  | N         | Critical theashold
 
-Example of invoking `check_passenge`
+Example of invoking `check_passenger`
 
     $ check_passenger -r -w 50 -c 100 secondhand -w 10 -c 20
 
