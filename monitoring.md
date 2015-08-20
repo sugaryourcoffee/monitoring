@@ -768,10 +768,10 @@ Flag |             | Parameter | Description
 
 Example of invoking `check_passenge`
 
-    $ check_passenger -r -w 50 -c 100 secondhand
+    $ check_passenger -r -w 50 -c 100 secondhand -w 10 -c 20
 
-The script is shown below.
+The script can be found [check_passenger](https://github.com/sugaryourcoffee/monitoring/blob/master/scripts/check_passenger). 
 
-    #!/usr/bin/env bash
+The next step is to use the script in the NRPE what we will do now.
 
 
