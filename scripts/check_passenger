@@ -1,0 +1,186 @@
+#!/usr/bin/env bash
+
+# Factors for converting days, hours and minutes into seconds
+DAYS=(24*60*60)
+HOURS=(60*60)
+MINUTES=(60)
+PROGNAME=$(basename $0)
+
+# Messages for status checks
+declare -A MESSAGES
+MESSAGES=(["Requests"]="Passenger requests %s - %s requests in queue\n" \
+          ["Load"]="Passenger load %s - CPU %s\n" \
+          ["Memory"]="Passenger memory %s - %s used\n" \
+          ["Accesses"]="Passenger accesses % s - %s accesses processed\n" \
+          ["Uptime"]="Passenger uptime %s - %s\n" \
+          ["Frequency"]="Passenger frequency %s - %s accesses per second\n" \
+          ["Sessions"]="Passenger sessions %s - %s sessions\n")
+
+# Converts a time like 2D 5H 10M 1S into seconds
+# usage: to_seconds nD nH nM nS
+to_seconds() {
+  local time=0
+  a=("$@")
+  for t in "${a[@]}"; do
+    local unit=$(echo $t | grep -oP '((?<=\d)\D+)')
+    case $unit in
+      d|D) (( time += $(echo $t | grep -oPi '(\d+(?=d))') * DAYS ))
+         ;;
+      h|H) (( time += $(echo $t | grep -oPi '(\d+(?=h))') * HOURS ))
+        ;;
+      m|M) (( time += $(echo $t | grep -oPi '(\d+(?=m))') * MINUTES ))
+        ;;
+      s|S) (( time += $(echo $t | grep -oPi '(\d+(?=s))') ))
+        ;;
+      *)   echo "Unknown time unit $unit" >&2; exit 1
+        ;;
+    esac
+  done
+  echo $time
+}
+
+# Initialize PATH and RVM gemset that holds the Passenger gem
+init() {
+  PROGNAME=$(basename $0)
+  export PATH=/home/pierre/.rvm/bin:$PATH
+  source /home/pierre/.rvm/environments/ruby-2.0.0-p643@rails401
+  return
+}
+
+usage() {
+  echo "$PROGNAME usage: $PROGNAME [options]"
+  echo "Options:"
+  echo "[-r | --requests ] APP - Requests in queue of APP"
+  echo "[-l | --load     ] APP - CPU load of APP"
+  echo "[-m | --memory   ] APP - Memory usage of APP"
+  echo "[-a | --access   ] APP - Accesses of APP during uptime"
+  echo "[-u | --uptime   ] APP - Uptime of APP"
+  echo "[-f | --frequency] APP - Acess frequency of APP"
+  echo "[-s | --sessions ] APP - Session of APP"
+  echo "[-w | --warning  ] N   - Threashold for [rlmaufs]"
+  echo "[-c | --critical ] N   - Threashold for [rlmaufs]"
+  return
+}
+
+passenger_status() {
+  rvmsudo passenger-status 2>/dev/null
+}
+
+# Retrieve the passenger status for the specified application
+# Usage:
+#   app_status application_name
+app_status() {
+  if [[ -z $1 ]]; then 
+    echo "Error function $FUNCNAME: usage: $FUNCNAME application_name" >&2
+    exit 1 
+  fi
+  echo "$(passenger_status | grep -A 3 $1)"
+}
+
+# Check the status for the specified value
+# usage: check_status_for value warning critical action
+check_status_for() {
+  if [[ (-n $2) && (-n $3) ]]; then
+
+    local value=0
+
+    if [[ $4 == "Uptime" ]]; then
+      value=$(to_seconds $(echo $1 | grep -P '[^\s]'))
+    else
+      value=$(echo $1 | grep -oP '\d+')
+    fi
+
+    if [[ $value -lt $2 ]]; then
+      printf "${MESSAGES[$4]}" "OK" "$1"
+      exit 0
+    elif [[ $value -lt $3 ]]; then
+      printf "${MESSAGES[$4]}" "WARNING" "$1"
+      exit 1
+    elif [[ $value -ge $3 ]]; then
+      printf "${MESSAGES[$4]}" "CRITICAL" "$1"
+      exit 2
+    fi
+  else
+    echo "$1"
+  fi
+}
+
+# Parse the command provided on the command line
+parse_action() {
+  if [[ $# -ne 4 ]]; then
+    echo "Error $FUNCNAME: usage: $FUNCNAME app action token position" >&2
+    exit 1
+  fi
+  action=$1
+  app=$2
+  token=$3
+  position=$4
+}
+
+# Parse the warning value
+parse_warning() {
+  warning=$2
+}
+
+# Parse the critical value
+parse_critical() {
+  critical=$2
+}
+
+# Process the frequency action
+# usage: process_frequency app warning critical action
+process_frequency() {
+  local uptime=$(app_status "$1" | grep "Uptime" | tr -s ' ' \
+    | cut -d' ' -f 10-13)
+  local accesses=$(app_status "$1" | grep "Processed" | tr -s ' ' \
+    | cut -d' ' -f 8)
+  local seconds=$(to_seconds $(echo $uptime | grep -P '[^\s]'))
+  #check_status_for $(bc <<< "scale=5;$accesses/$seconds") $2 $3
+  check_status_for $(( accesses / seconds )) $2 $3 $4
+}
+
+# Process the action
+# usage: process_action app token position warning critical action
+process_action() {
+  local value=$(app_status "$1" | grep "$2" | tr -s ' ' | cut -d' ' -f $3)
+  check_status_for "$value" $4 $5 $6
+}
+
+action=
+app=
+token=
+position=
+warning=
+critical=
+
+init
+
+
+if [[ -z $1 ]]; then
+  passenger_status
+  exit 0
+else
+  while [[ -n $1 ]]; do
+    case $1 in
+      -r | --requests)    parse_action "Requests" $2 "Requests in queue:" 5 ;;
+      -l | --load)        parse_action "Load" $2 "CPU" 3 ;;
+      -m | --memory)      parse_action "Memory" $2 "Memory" 6 ;;
+      -a | --access)      parse_action "Accesses" $2 "Processed" 8 ;;
+      -u | --uptime)      parse_action "Uptime" $2 "Uptime" "10-13" ;;
+      -f | --frequency)   parse_action "Frequency" $2 "Frequency" -1 ;;
+      -s | --sessions)    parse_action "Sessions" $2 "Sessions" 6 ;;
+      -w | --warning)     parse_warning $1 $2 ;;
+      -c | --critical)    parse_critical $1 $2 ;;
+      -h | --help)        usage; exit 0 ;;
+      *)                  usage; exit 1 ;;
+    esac
+    shift ; shift
+  done
+fi
+
+if [[ $action == "Frequency" ]]; then
+  process_frequency $app $warning $critical $action
+else
+  process_action $app "$token" $position $warning $critical $action
+fi
+
