@@ -23,8 +23,26 @@ But to be precise we try to document each step
 
 First we create a directory where to host our monitoring system
 
-    $ mkdir -p Monitoring/nagios
-    $ cd Monitoring/nagios
+    $ mkdir -p Monitoring/{docs,nagios,scripts}
+
+Working Environment
+===================
+In order to work efficiently we want to set up a working environment to have
+everything we need on the desktop. For that to do we use _tmux_. We will have
+a window with four panes. We start a new tmux session with the name _monitoring_
+in the directory `monitoring`.
+
+    $ cd ~/Monitoring
+    $ tmux new -s monitoring
+
+Within the tmux session we create 4 panes with `CTRL` `"` and `CTRL` `%`
+
+Pane   | Directory            | Description
+------ | -------------------- | ------------------------------------------------
+nagios | ~/Monitoring/nagios/ | Where we create and start the Nagios server box
+puppet | uranus:/etc/puppet/  | SSH session with the the puppet server _uranus_
+git    | ~/Monitoring/        | Our console for e.g. committing changes to _git_
+doc    | ~/Monitoring/docs/   | Where we write the documentation of what we do
 
 Create a box
 ============
@@ -54,6 +72,7 @@ differnt box.
 
 After we have installed VirtualBox and Vagrant we can create our box with
 
+    $ cd ~/Monitoring/nagios
     $ vagrant init ubuntu/trusty64
 
 This will create a Vagrantfile with a basic configuration. We supplement the
@@ -774,4 +793,24 @@ The script can be found [check_passenger](https://github.com/sugaryourcoffee/mon
 
 The next step is to use the script in the NRPE what we will do now.
 
+Directory Structure
+===================
+Our directory structure looks like this
 
+    Monitoring
+    ├── docs
+    │   └── monitoring.md
+    ├── nagios
+    │   ├── files
+    │   ├── manifests
+    │   │   ├── default.pp
+    │   │   ├── init.pp
+    │   │   ├── nodes.pp
+    │   │   ├── server.pp
+    │   │   └── site.pp
+    │   └── Vagrantfile
+    ├── nagios_ops
+    ├── README.md
+    └── scripts
+        ├── check_passenger
+        └── time2secs
