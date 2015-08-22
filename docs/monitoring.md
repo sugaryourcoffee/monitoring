@@ -768,7 +768,7 @@ put the script into `/usr/lib/nagios/plugins/check_passenger`.
 
 The usage of passenger is
 
-    $ check_passenger [options] [app]
+    $ check_passenger [options]
 
 The options are explained in the table below.
 
@@ -787,11 +787,130 @@ Flag |             | Parameter | Description
 
 Example of invoking `check_passenger`
 
-    $ check_passenger -r -w 50 -c 100 secondhand -w 10 -c 20
+    $ ./check_passenger -r secondhand -w 50 -c 100
 
 The script can be found [check_passenger](https://github.com/sugaryourcoffee/monitoring/blob/master/scripts/check_passenger). 
 
-The next step is to use the script in the NRPE what we will do now.
+The next step is to use the script in the NRPE what we will do now. The steps
+we follow are
+
+* Put check_passenger in a new Puppet directory 
+  `/etc/puppet/modules/nagios/files/plugins`
+* Add the file to a file resource in 
+  `/etc/puppet/modules/nagios/manifests/client/config.pp
+* Create a Nagios command for check_passenger in 
+  `/etc/puppet/modules/nagios/files/conf.d/commands.cfg
+* Add the new command to `/etc/puppet/modules/nagios/files/nrpe.cfg`
+* Add the command definition to 
+  `/etc/puppet/modules/nagios/files/conf.d/hosts/uranus.cfg`
+* Run sudo puppet agent --test on the Nagios server and 
+  puppet apply /etc/puppet/manifests/site.pp
+
+We will now go through each of theses steps.
+
+Manage check_passenger by Puppet
+--------------------------------
+We create a new directory `plugins`where we put check_passenger to
+
+    $ cd /etc/puppet/modules/nagios
+    $ mkdir files/plugins
+    $ cp /usr/lib/nagios/plugins/check_passenger files/plugins/
+   
+Add check_passenger File Resource to client/config.pp
+-----------------------------------------------------
+In order to get check_passenger in place we create a file resource in
+`/etc/puppet/modules/nagios/manifests/client/config.pp`
+
+    File { "/usr/lib/nagios/plugins/check_passenger":
+      source => "puppet:///modules/nagios/plugins/check_passenger",
+      owner  => nagios,
+      group  => nagios,
+      mode   => 755,
+    }
+
+Create a Nagios Command for check_passenger
+-------------------------------------------
+We define a new command that Nagios can use to invoke our check_passenger
+script. We put all the check_passenger commands in 
+`/etc/puppet/modules/nagios/files/conf.d/commands.cfg`
+
+    define command {
+      command_name check_passenger
+      command_line /usr/lib/nagios/plugins/check_passenger
+    }
+
+    define command {
+      command_name check_passenger_requests
+      command_line /usr/lib/nagios/plugins/check_passenger \
+        -r $ARG1$ -w $ARG2$ -c $ARG3$
+    }
+
+    define command {
+      command_name check_passenger_load
+      command_line /usr/lib/nagios/plugins/check_passenger \
+        -l $ARG1$ -w $ARG2$ -c $ARG3$
+    }
+
+    define command {
+      command_name check_passenger_memory
+      command_line /usr/lib/nagios/plugins/check_passenger \
+        -m $ARG1$ -w $ARG2$ -c $ARG3$
+    }
+
+    define command {
+      command_name check_passenger_accesses
+      command_line /usr/lib/nagios/plugins/check_passenger \
+        -a $ARG1$ -w $ARG2$ -c $ARG3$
+    }
+
+    define command {
+      command_name check_passenger_uptime
+      command_line /usr/lib/nagios/plugins/check_passenger \
+        -u $ARG1$ -w $ARG2$ -c $ARG3$
+    }
+
+    define command {
+      command_name check_passenger_frequency
+      command_line /usr/lib/nagios/plugins/check_passenger \
+        -f $ARG1$ -w $ARG2$ -c $ARG3$
+    }
+
+    define command {
+      command_name check_passenger_sessions
+      command_line /usr/lib/nagios/plugins/check_passenger \
+        -s $ARG1$ -w $ARG2$ -c $ARG3$
+    }
+
+Add check_passenger Commands to nrpe.cfg
+----------------------------------------
+To make check_passenger commands available we have to add them to nrpe.cfg. We
+add all commands to nrpe.cfg so we can later decide which we want to use. We put
+them to `/etc/puppet/modules/nagios/files/nrpe.cfg`.
+
+    command[check_passenger_memory]=/usr/lib/nagios/plugins/check_passenger \
+      -m secondhand -w 100 -c 150
+
+Add Service for check_passenger
+-------------------------------
+In order to make Nagios run the command we have to add an additonal service to
+`/etc/puppet/nagios/files/conf.d/hosts/uranus.pp`
+
+    define service {
+      use                 generic-service
+      host_name           uranus
+      service_description Passenger Memory
+      check_command       check_nrpe_1arg!check_passenger_memory
+    } 
+
+Run Puppet
+----------
+Now that we have all the configuration files organized in Puppet we need to run
+so they get into place. As all changes only happen on the uranus server we just
+have to run
+
+    $ puppet apply -v /etc/puppet/manifests/site.pp
+
+When we look at the Nagios web interface we should see the new service.
 
 Directory Structure
 ===================
