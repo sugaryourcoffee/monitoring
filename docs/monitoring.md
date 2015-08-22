@@ -785,7 +785,7 @@ Flag |             | Parameter | Description
 -w   | --warning   | N         | Warning threashold
 -c   | --critical  | N         | Critical theashold
 
-Example of invoking `check_passenger`
+Example of invoking `check\_passenger`
 
     $ ./check_passenger -r secondhand -w 50 -c 100
 
@@ -794,11 +794,12 @@ The script can be found [check_passenger](https://github.com/sugaryourcoffee/mon
 The next step is to use the script in the NRPE what we will do now. The steps
 we follow are
 
-* Put check_passenger in a new Puppet directory 
+* Add user nagios to /etc/sudoers without NOPASSWD for passenger_status
+* Put check\_passenger in a new Puppet directory 
   `/etc/puppet/modules/nagios/files/plugins`
 * Add the file to a file resource in 
   `/etc/puppet/modules/nagios/manifests/client/config.pp
-* Create a Nagios command for check_passenger in 
+* Create a Nagios command for check\_passenger in 
   `/etc/puppet/modules/nagios/files/conf.d/commands.cfg
 * Add the new command to `/etc/puppet/modules/nagios/files/nrpe.cfg`
 * Add the command definition to 
@@ -808,17 +809,49 @@ we follow are
 
 We will now go through each of theses steps.
 
-Manage check_passenger by Puppet
+Add user nagios to /etc/sudoers
+-------------------------------
+This is an important step. As we are using in our script `passenger-status`, 
+which in turn needs to be run with rvmsudo, we have to add user nagios to the
+`/etc/sudoers` file with the _NOPASSWD_ directive. We don't add this to 
+`/etc/sudoers` directly but rather we put it in `/etc/sudoers.d/nagios`. For
+editing _sudoers_ files it is recommended to use _visudo_.
+
+    $ sudo visudo -f /etc/sudoers.d/nagios
+
+This will open the _nano_ editor with `nagios.tmp`. Then we add following 
+content
+
+    nagios ALL=(ALL) NOPASSWD:/usr/lib/nagios/plugins/,\
+    /home/pierre/.rvm/gems/ruby-2.0.0-p643@rails401/bin/passenger-status
+
+To save your changes press _CTRL-X_ and confirm with `Y` that you want to save
+changes. Then hit `RETURN` confirming that you want to write to `nagios.tmp`.
+If there are any syntax errors you will be put back to nano.
+
+Note: To find the path to _passenger-status_ you can 
+call `rvmsudo which passenger-status`
+
+Note: If you mess up your sudoers file you can recover with `pkexec visudo`
+
+Next open up `/etc/nagios/nrpe.cfg` and uncomment `command_prefix=/usr/bin/suod`
+
+In order to make the changes available we have to restart the 
+_nagios-nrpe-server_ with
+
+    $ sudo service nagios-nrpe-server restart
+
+Manage check\_passenger by Puppet
 --------------------------------
-We create a new directory `plugins`where we put check_passenger to
+We create a new directory `plugins`where we put check\_passenger to
 
     $ cd /etc/puppet/modules/nagios
     $ mkdir files/plugins
     $ cp /usr/lib/nagios/plugins/check_passenger files/plugins/
    
-Add check_passenger File Resource to client/config.pp
+Add check\_passenger File Resource to client/config.pp
 -----------------------------------------------------
-In order to get check_passenger in place we create a file resource in
+In order to get check\_passenger in place we create a file resource in
 `/etc/puppet/modules/nagios/manifests/client/config.pp`
 
     File { "/usr/lib/nagios/plugins/check_passenger":
@@ -828,10 +861,10 @@ In order to get check_passenger in place we create a file resource in
       mode   => 755,
     }
 
-Create a Nagios Command for check_passenger
+Create a Nagios Command for check\_passenger
 -------------------------------------------
-We define a new command that Nagios can use to invoke our check_passenger
-script. We put all the check_passenger commands in 
+We define a new command that Nagios can use to invoke our check\_passenger
+script. We put all the check\_passenger commands in 
 `/etc/puppet/modules/nagios/files/conf.d/commands.cfg`
 
     define command {
@@ -881,7 +914,7 @@ script. We put all the check_passenger commands in
         -s $ARG1$ -w $ARG2$ -c $ARG3$
     }
 
-Add check_passenger Commands to nrpe.cfg
+Add check\_passenger Commands to nrpe.cfg
 ----------------------------------------
 To make check_passenger commands available we have to add them to nrpe.cfg. We
 add all commands to nrpe.cfg so we can later decide which we want to use. We put
@@ -890,7 +923,7 @@ them to `/etc/puppet/modules/nagios/files/nrpe.cfg`.
     command[check_passenger_memory]=/usr/lib/nagios/plugins/check_passenger \
       -m secondhand -w 100 -c 150
 
-Add Service for check_passenger
+Add Service for check\_passenger
 -------------------------------
 In order to make Nagios run the command we have to add an additonal service to
 `/etc/puppet/nagios/files/conf.d/hosts/uranus.pp`
@@ -908,9 +941,12 @@ Now that we have all the configuration files organized in Puppet we need to run
 so they get into place. As all changes only happen on the uranus server we just
 have to run
 
-    $ puppet apply -v /etc/puppet/manifests/site.pp
+    $ puppet apply --verbose /etc/puppet/manifests/site.pp
 
-When we look at the Nagios web interface we should see the new service.
+When we look at the Nagios web interface we should see the new service. We can
+also check on our Nagios server whether we can invoke our new plugin with
+
+    $ /usr/lib/nagios/plugins/check_nrpe -H uranus -c check_passenger_memory
 
 Directory Structure
 ===================
