@@ -234,8 +234,25 @@ If we would push our module to _Puppet Forge_ we would have to use our
 company name _sugaryourcoffe_ but for the module we need to have the pure 
 nagios name in order this to be working.
 
-The scaffolding of our module has created a bare `nagios/manifests/init.pp` file
-we rename to 'nagios/manifests/server.pp` and extend with
+Now is a good time to start managing our Puppet modules with _Git_. In 
+`/etc/puppet/modules`. To do this we give the write permissions to the user for 
+`/etc/puppet/modules/` and initialize our Git repository.
+
+    $ sudo chgrp -R pierre /etc/puppet/modules
+    $ sudo chmod -R g+w /etc/puppet/modules
+    $ git init
+    $ git add .
+    $ git commit -am "Initial commit"
+
+We create a Git repository on [Github](https://github.com) and add the remote
+repository and push it to Github.
+
+    $ git remote add origin git@github.com:sugaryourcoffee/puppet-server.git
+    $ git push -u origin master
+
+Now back to Puppet. The scaffolding of our module has created a bare 
+`nagios/manifests/init.pp` file we rename to 'nagios/manifests/server.pp` and 
+extend with
 
     class nagios::server {
       class { '::nagios::server::install`: } ->
@@ -794,7 +811,7 @@ The script can be found [check_passenger](https://github.com/sugaryourcoffee/mon
 The next step is to use the script in the NRPE what we will do now. The steps
 we follow are
 
-* Add user nagios to /etc/sudoers without NOPASSWD for passenger_status
+* Allow user nagios to invoke plugins with sudo
 * Put check\_passenger in a new Puppet directory 
   `/etc/puppet/modules/nagios/files/plugins`
 * Add the file to a file resource in 
@@ -814,10 +831,11 @@ Add user nagios to /etc/sudoers
 This is an important step. As we are using in our script `passenger-status`, 
 which in turn needs to be run with rvmsudo, we have to add user nagios to the
 `/etc/sudoers` file with the _NOPASSWD_ directive. We don't add this to 
-`/etc/sudoers` directly but rather we put it in `/etc/sudoers.d/nagios`. For
-editing _sudoers_ files it is recommended to use _visudo_.
+`/etc/sudoers` directly but rather we put it in 
+`/etc/sudoers.d/nagios-permissions`. For editing _sudoers_ files it is 
+recommended to use _visudo_.
 
-    $ sudo visudo -f /etc/sudoers.d/nagios
+    $ sudo visudo -f /etc/sudoers.d/nagios-permissions
 
 This will open the _nano_ editor with `nagios.tmp`. Then we add following 
 content
@@ -834,12 +852,32 @@ call `rvmsudo which passenger-status`
 
 Note: If you mess up your sudoers file you can recover with `pkexec visudo`
 
-Next open up `/etc/nagios/nrpe.cfg` and uncomment `command_prefix=/usr/bin/suod`
+To get this file managed with Puppet copy it to 
+`/etc/puppet/modules/nagios/files/` and change the file permissions so we can
+add them to our Git repository.
+
+    $ sudo cp /etc/sudoers.d/nagios-permissions \
+              /etc/puppet/modules/nagios/files/
+    $ sudo chgrp pierre /etc/puppet/modules/nagios/files/nagios-permissons
+
+and add a file source to `/etc/puppet/modules/nagios/manifests/client/config.pp`
+
+    file { "/etc/sudoers.d/nagios":
+      source => "puppet:///modules/nagios/nagios",
+      owner  => root,
+      group  => root,
+      mode   => 440,
+    }
+
+Next open up `/etc/puppet/nagios/files/nrpe.cfg` (`/etc/nagios/nrpe.cfg`) 
+and uncomment `command_prefix=/usr/bin/sudo`
 
 In order to make the changes available we have to restart the 
 _nagios-nrpe-server_ with
 
     $ sudo service nagios-nrpe-server restart
+
+But this will be done by Puppet after our last step. So keep patient.
 
 Manage check\_passenger by Puppet
 --------------------------------
@@ -938,7 +976,8 @@ In order to make Nagios run the command we have to add an additonal service to
 Run Puppet
 ----------
 Now that we have all the configuration files organized in Puppet we need to run
-so they get into place. As all changes only happen on the uranus server we just
+so they get into place. As all changes only happen on the uranus server, which
+form Nagios' point of view is the remote host we just
 have to run
 
     $ puppet apply --verbose /etc/puppet/manifests/site.pp
@@ -947,6 +986,11 @@ When we look at the Nagios web interface we should see the new service. We can
 also check on our Nagios server whether we can invoke our new plugin with
 
     $ /usr/lib/nagios/plugins/check_nrpe -H uranus -c check_passenger_memory
+    Passenger apptrack memory OK - 72M used
+
+Note: If you get an error saying 
+_sudo: no tty present and no askpass programm specified_ then go back to 
+step 1 and double check your settings.
 
 Directory Structure
 ===================
