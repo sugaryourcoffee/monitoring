@@ -780,7 +780,7 @@ We now add these to `uranus.cfg`. Following we show how to use the
     }
 
 Next we want to check up _Phusion Passenger_. For that to do we write a Bash
-script that is using _passenger_status_ that provides process information. We 
+script that is using *passenger_status* that provides process information. We 
 put the script into `/usr/lib/nagios/plugins/check_passenger`.
 
 The usage of passenger is
@@ -801,6 +801,7 @@ Flag |             | Parameter | Description
 -s   | --sessions  | APP       | Sessions of APP
 -w   | --warning   | N         | Warning threashold
 -c   | --critical  | N         | Critical theashold
+-h   | --help      |           | Print help
 
 Example of invoking `check\_passenger`
 
@@ -889,7 +890,7 @@ We create a new directory `plugins`where we put check\_passenger to
    
 Add check\_passenger File Resource to client/config.pp
 -----------------------------------------------------
-In order to get check\_passenger in place we create a file resource in
+In order to get *check_passenger* in place we create a file resource in
 `/etc/puppet/modules/nagios/manifests/client/config.pp`
 
     File { "/usr/lib/nagios/plugins/check_passenger":
@@ -902,7 +903,7 @@ In order to get check\_passenger in place we create a file resource in
 Create a Nagios Command for check\_passenger
 -------------------------------------------
 We define a new command that Nagios can use to invoke our check\_passenger
-script. We put all the check\_passenger commands in 
+script. We put all the *check_passenger* commands in 
 `/etc/puppet/modules/nagios/files/conf.d/commands.cfg`
 
     define command {
@@ -980,7 +981,7 @@ so they get into place. As all changes only happen on the uranus server, which
 form Nagios' point of view is the remote host we just
 have to run
 
-    $ puppet apply --verbose /etc/puppet/manifests/site.pp
+    $ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
 
 When we look at the Nagios web interface we should see the new service. We can
 also check on our Nagios server whether we can invoke our new plugin with
