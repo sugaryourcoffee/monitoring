@@ -1243,9 +1243,10 @@ have a look at these books. Most of the information about Puppet and Nagios I
 have optained from *Deploying Rails*. How to create a Bash script I have learned
 from *The Linux Command Line*.
 
-[Deploying Rails](https://pragprog.com/book/cbdepra/deploying-rails) from Anthony Burns and Tom Copeland. This book is unfortunately out of print.
-[Pro Puppet](http://www.apress.com/9781430260400?gtmf=s) from Spencer Krum.
-[Learning Nagios 4](https://www.packtpub.com/application-development/learning-nagios-4) from Wijciech Kocjan.
-[The Linux Command Line](https://www.nostarch.com/tlcl) from William E. Shotts, 
-Jr.
+* [Deploying Rails](https://pragprog.com/book/cbdepra/deploying-rails) 
+  from Anthony Burns and Tom Copeland. This book is unfortunately out of print.
+* [Pro Puppet](http://www.apress.com/9781430260400?gtmf=s) from Spencer Krum.
+* [Learning Nagios 4](https://www.packtpub.com/application-development/learning-nagios-4) from Wijciech Kocjan.
+* [The Linux Command Line](https://www.nostarch.com/tlcl) from 
+  William E. Shotts, Jr.
 
