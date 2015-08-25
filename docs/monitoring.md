@@ -1197,7 +1197,7 @@ nagios | /etc/nagios3/conf.d/hosts/dyndns.cfg | nagios/files/conf.d/hosts/sycdyn
 nagios | /etc/nagios3/conf.d/hosts/localhost_nagios.cfg | nagios/files/conf.d/hosts/localhost_nagios.cfg
 nagios | /etc/nagios3/conf.d/hosts/mercury.cfg | nagios/files/conf.d/hosts/mercury.cfg
 nagios | /etc/nagios3/conf.d/hosts/uranus.cfg | nagios/files/conf.d/hosts/uranus.cfg
-nagios | /usr/lib/nagios/plugins/check_passenger | nagios/files/plugins/check_passenger
+uranus | /usr/lib/nagios/plugins/check_passenger | nagios/files/plugins/check_passenger
 
 Directory Structure
 -------------------
