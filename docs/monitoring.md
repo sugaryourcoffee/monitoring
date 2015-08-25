@@ -9,7 +9,7 @@ monitoring server with a VirtualBox. We will follow these steps
 * Configure monitoring
 
 We will work on differnt machines and to indicate on which machine we are 
-invoking commandline commads we show a prompt like this
+invoking commandline commands we show a prompt like this
 
     machine$ echo "We are on machine"
 
@@ -19,8 +19,7 @@ Machine    | Task
 ---------- | ------------------------------------------------------------
 saltspring | development hosting the nagios server run in Virtualbox
 nagios     | Nagios server in Virtualbox hosted by saltspring
-uranus     | Puppet server and server hosting the apptrack and secondhand 
-staging Rails applications
+uranus     | Puppet server and server hosting the apptrack and secondhand staging Rails applications
 mercury    | Server hosting secondhand Rails application
 
 Used Software
