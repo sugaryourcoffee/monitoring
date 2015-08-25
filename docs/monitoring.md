@@ -1066,6 +1066,95 @@ should rename our first service according to what it is really checking
 `Passenger apptrack memory`. But we can do better but be warned with a seurity 
 risk.
 
+To enable parameter passing with NRPE we have to follow these steps
+
+* Set `dont_blame_me=1` in /etc/nagios/nrpe.cfg on the remote host *uranus*
+* Add the command `command[check_passenger]=/usr/lib/nagios/plugins/\
+  check_passenger -m $ARG1$ -w $ARG2$ -c $ARG3$
+* Check that the command can be invoked from the Nagios host *nagios*
+* Copy `/etc/nagios/nrpe.cfg` to `/etc/puppet/modules/nagios/files/nrpe.cfg`
+* Add a command definition to 
+  `/etc/puppet/modules/nagios/files/conf.d/commands.cfg` on the Puppet server
+* Add a service definition to 
+  `/etc/puppet/modules/nagios/files/conf.d/hosts/uranus.cfg`
+* Run puppet on the remote host *uranus* and on the Nagios server *nagios*
+
+Again we describe all of these steps in detail.
+
+### Enable Parameter with NRPE
+To enable parameter passing to NRPE we have to set the `dont_blame_me` parameter
+to 1 in `/etc/nagios/nrpe.cfg`
+
+    dont_blame_me=1
+
+### Add a Command with Parameters to nrpe.cfg
+In order to call a command with parameters enabled we have to add the command
+to `/etc/nagios/nrpe.cfg`
+
+    command[check_passenger_memory]=/usr/lib/nagios/plugins/check_passenger \
+    -m $ARG1$ -w $ARG2$ -c $ARG3$
+
+### Check the Command from the Nagios Server
+Before we do further configuration we first check that the command can be 
+invoked with parameters. From the Nagios server *nagios* we issue following 
+command
+
+    /usr/lib/nagios/plugins/check_nrpe -H uranus -c check_passenger_memory \
+    -a apptrack 150 200
+
+As you can see in the invocation above we don't use the flags (-m, -w, -c) but
+rather use -a which expects the parameter values in the right sequence as 
+defined in `command[check_passenger_memory]`. 
+
+We do another check for *secondhand* with
+
+    /usr/lib/nagios/plugins/check_nrpe -H uranus -c check_passenger_memory \
+    -a secondhand 150 200
+
+### Copy nrpe to Puppet
+If the command can be invoked we copy nrpe.cfg to the Puppet directory in order
+it gets managed by Puppet.
+
+    uranus$ sudo cp /etc/nagios/nrpe.cfg \
+                    /etc/puppet/modules/nagios/files/nrpe.cfg
+
+### Add a Command Definition
+Next we have to add a command definition to `/etc/puppet/modules/nagios/files/conf.d/commands.cfg`
+
+    define command {
+      command_name      check_passenger_memory
+      command_line      /usr/lib/nagios/plugins/check_passenger \
+      -H "$HOSTADDRESS$" -c "check_passenger" -a $ARG1$ $ARG2$ $ARG3$
+    }
+
+### Add a Service Definition
+Finally we add the actual invocation of the command by defining a respective
+service in `/etc/puppet/modules/nagios/files/conf.d/hosts/uranus.cfg`
+
+    define service {
+      use                generic-service
+      host_name          uranus
+      service_description Passenger apptrack memory
+      check_command       check_passenger_memory!apptrack!150!200
+    }
+
+    define service {
+      use                 generic-service
+      host_name           uranus
+      service_description Passenger secondhand memory
+      check_command       check_passenger_memory!secondhand!150!200
+    }
+
+### Run Puppet
+The final step to get our Nagios checks to work we have to call Puppet to get
+the files in place
+
+    nagios$ sudo puppet agent --test
+    uranus$ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
+
+To check everything is working head over to your browser and look at the 
+Nagios web interface at 
+[http://localhost:4567/nagios3/](http://localhost:4567/nagios3/)
 
 Directory Structure
 ===================
