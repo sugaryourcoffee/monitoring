@@ -1063,8 +1063,31 @@ If someone else reads this it looks like the first service is checking the
 total memory and the second is checking the secondhand specific memory. This is
 not a real issue but in order to make it more clear what we are checking we
 should rename our first service according to what it is really checking 
-`Passenger apptrack memory`. But we can do better but be warned with a seurity 
-risk.
+`Passenger apptrack memory`. 
+
+The `/etc/nagios3/conf.d/hosts/uranus.pp` looks now like this
+
+    define service {
+      use                generic-service
+      host_name          uranus
+      service_descripton Passenger apptrack memory
+      check_command      check_nrpe_1arg!check_passenger_apptrack_memory
+    }
+
+    define service {
+      use                generic-service
+      host_name          uranus
+      service_descripton Passenger secondhand memory
+      check_command      check_nrpe_1arg!check_passenger_secondhand_memory
+    }
+
+Along with this change we also have to change our command in 
+`/etc/nagios/nrpe.cfg` to
+
+    command[check_passenger_apptrack_memory]=/usr/lib/nagios/plugins/\
+    check_passenger -m apptrack -w 150 -c 200
+
+But we can do better but be warned with a security risk.
 
 To enable parameter passing with NRPE we have to follow these steps
 
@@ -1156,24 +1179,60 @@ To check everything is working head over to your browser and look at the
 Nagios web interface at 
 [http://localhost:4567/nagios3/](http://localhost:4567/nagios3/)
 
-Directory Structure
-===================
-Our directory structure looks like this
+Mapping of Nagios Files to Puppet Files
+---------------------------------------
+After having a lot of files to manage the table that follows is which Nagios
+file maps to which Puppet file. Here the *Server* column indicates on which
+server the Nagios file resides.
 
-    Monitoring
-    ├── docs
-    │   └── monitoring.md
-    ├── nagios
-    │   ├── files
-    │   ├── manifests
-    │   │   ├── default.pp
-    │   │   ├── init.pp
-    │   │   ├── nodes.pp
-    │   │   ├── server.pp
-    │   │   └── site.pp
-    │   └── Vagrantfile
-    ├── nagios_ops
-    ├── README.md
-    └── scripts
-        ├── check_passenger
-        └── time2secs
+Server | Nagios | Puppet
+------ | ------ | ------
+nagios | /etc/nagios3/apache2.conf | nagios/files/apache2.conf
+nagios | /etc/nagios3/htpasswd.users | nagios/files/htpasswd.users
+nagios | /etc/nagios3/nagios.cfg | nagios/files/nagios.cfg
+uranus | /etc/sudoers.d/nagios-permissions | nagios/files/nagios-permissions
+uranus | /etc/nagios/nrpe.cfg | nagios/files/nrpe.cfg
+nagios | /etc/nagios3/conf.d/commands.cfg | nagios/files/conf.d/commands.cfg
+nagios | /etc/nagios3/conf.d/hosts/dyndns.cfg | nagios/files/conf.d/hosts/sycdyndns.cfg
+nagios | /etc/nagios3/conf.d/hosts/localhost_nagios.cfg | nagios/files/conf.d/hosts/localhost_nagios.cfg
+nagios | /etc/nagios3/conf.d/hosts/mercury.cfg | nagios/files/conf.d/hosts/mercury.cfg
+nagios | /etc/nagios3/conf.d/hosts/uranus.cfg | nagios/files/conf.d/hosts/uranus.cfg
+nagios | /usr/lib/nagios/plugins/check_passenger | nagios/files/plugins/check_passenger
+
+Directory Structure
+-------------------
+Our Puppet directory structure looks like this now
+
+nagios 
+├── files
+│   ├── apache2.conf
+│   ├── conf.d
+│   │   ├── commands.cfg
+│   │   └── hosts
+│   │       ├── dyndns.cfg
+│   │       ├── localhost_nagios.cfg
+│   │       ├── mercury.cfg
+│   │       └── uranus.cfg
+│   ├── htpasswd.users
+│   ├── nagios.cfg
+│   ├── nagios-permissions
+│   ├── nrpe.cfg
+│   └── plugins
+│       └── check_passenger
+├── manifests
+│   ├── client
+│   │   ├── config.pp
+│   │   └── install.pp
+│   ├── client.pp
+│   ├── server
+│   │   ├── config.pp
+│   │   ├── install.pp
+│   │   └── service.pp
+│   └── server.pp
+├── Modulefile
+├── README
+├── spec
+│   └── spec_helper.rb
+└── tests
+    └── init.pp
+
