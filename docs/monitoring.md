@@ -779,9 +779,17 @@ We now add these to `uranus.cfg`. Following we show how to use the
       check_command       check_nrpe_1arg!check_all_disks
     }
 
-Next we want to check up _Phusion Passenger_. For that to do we write a Bash
-script that is using *passenger_status* that provides process information. We 
-put the script into `/usr/lib/nagios/plugins/check_passenger`.
+In order to activate the changes we have to run Puppet on the Nagios server 
+*nagios* and on the remote host *uranus*.
+
+    nagios$ sudo puppet agent --test
+    uranus$ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
+
+Check up Phusion Passenger
+--------------------------
+Next we want to check up _Phusion Passenger_. For that to do we write a Nagios 
+plugin as a Bash script that is using *passenger_status* that provides process 
+information. We put the script into `/usr/lib/nagios/plugins/check_passenger`.
 
 The usage of passenger is
 
@@ -816,10 +824,10 @@ we follow are
 * Put check\_passenger in a new Puppet directory 
   `/etc/puppet/modules/nagios/files/plugins`
 * Add the file to a file resource in 
-  `/etc/puppet/modules/nagios/manifests/client/config.pp
+  `/etc/puppet/modules/nagios/manifests/client/config.pp`
 * Create a Nagios command for check\_passenger in 
-  `/etc/puppet/modules/nagios/files/conf.d/commands.cfg
-* Add the new command to `/etc/puppet/modules/nagios/files/nrpe.cfg`
+  `/etc/puppet/modules/nagios/files/conf.d/commands.cfg`
+* Enable the new command in `/etc/puppet/modules/nagios/files/nrpe.cfg`
 * Add the command definition to 
   `/etc/puppet/modules/nagios/files/conf.d/hosts/uranus.cfg`
 * Run sudo puppet agent --test on the Nagios server and 
@@ -827,8 +835,7 @@ we follow are
 
 We will now go through each of theses steps.
 
-Add user nagios to /etc/sudoers
--------------------------------
+### Add user nagios to /etc/sudoers
 This is an important step. As we are using in our script `passenger-status`, 
 which in turn needs to be run with rvmsudo, we have to add user nagios to the
 `/etc/sudoers` file with the _NOPASSWD_ directive. We don't add this to 
@@ -880,16 +887,14 @@ _nagios-nrpe-server_ with
 
 But this will be done by Puppet after our last step. So keep patient.
 
-Manage check\_passenger by Puppet
---------------------------------
+### Manage check\_passenger by Puppet
 We create a new directory `plugins`where we put check\_passenger to
 
     $ cd /etc/puppet/modules/nagios
     $ mkdir files/plugins
     $ cp /usr/lib/nagios/plugins/check_passenger files/plugins/
    
-Add check\_passenger File Resource to client/config.pp
------------------------------------------------------
+### Add check\_passenger File Resource to client/config.pp
 In order to get *check_passenger* in place we create a file resource in
 `/etc/puppet/modules/nagios/manifests/client/config.pp`
 
@@ -900,8 +905,7 @@ In order to get *check_passenger* in place we create a file resource in
       mode   => 755,
     }
 
-Create a Nagios Command for check\_passenger
--------------------------------------------
+### Create a Nagios Command for check\_passenger
 We define a new command that Nagios can use to invoke our check\_passenger
 script. We put all the *check_passenger* commands in 
 `/etc/puppet/modules/nagios/files/conf.d/commands.cfg`
@@ -953,8 +957,7 @@ script. We put all the *check_passenger* commands in
         -s $ARG1$ -w $ARG2$ -c $ARG3$
     }
 
-Add check\_passenger Commands to nrpe.cfg
-----------------------------------------
+### Add check\_passenger Commands to nrpe.cfg
 To make check_passenger commands available we have to add them to nrpe.cfg. We
 add all commands to nrpe.cfg so we can later decide which we want to use. We put
 them to `/etc/puppet/modules/nagios/files/nrpe.cfg`.
@@ -962,8 +965,7 @@ them to `/etc/puppet/modules/nagios/files/nrpe.cfg`.
     command[check_passenger_memory]=/usr/lib/nagios/plugins/check_passenger \
       -m secondhand -w 100 -c 150
 
-Add Service for check\_passenger
--------------------------------
+### Add Service for check\_passenger
 In order to make Nagios run the command we have to add an additonal service to
 `/etc/puppet/nagios/files/conf.d/hosts/uranus.pp`
 
@@ -974,12 +976,17 @@ In order to make Nagios run the command we have to add an additonal service to
       check_command       check_nrpe_1arg!check_passenger_memory
     } 
 
-Run Puppet
-----------
+### Run Puppet
 Now that we have all the configuration files organized in Puppet we need to run
-so they get into place. As all changes only happen on the uranus server, which
-form Nagios' point of view is the remote host we just
-have to run
+so they get into place. We have made changes to configuration files of the
+Nagios server *nagios* and on the *uranus* server, which from Nagios' point of 
+view is the remote host. So we have to run puppet on *nagios* and on *uranus*.
+
+On *nagios* we run
+
+    $ sudo puppet agent --test
+
+and on *uranus* we run
 
     $ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
 
@@ -992,6 +999,73 @@ also check on our Nagios server whether we can invoke our new plugin with
 Note: If you get an error saying 
 _sudo: no tty present and no askpass programm specified_ then go back to 
 step 1 and double check your settings.
+
+### Overview of Configuration Files
+It's quite easy to loose track with all these configuration files and what goes
+where. Therefore here is an overview. *uranus* is the remote host where the 
+NRPE server runs and *nagios* is the Nagios server that calls the plugin on the
+remote host over NRPE.
+
+Server | Content                                | File
+------ | -------------------------------------- | ------------------------------------
+uranus | Plugin called from nagios on uranus    | /usr/lib/nagios/plugins/
+uranus | Enable plugin to be called from nagios | /etc/nagios/nrpe.cfg
+nagios | Command definition of remote plugin    | /etc/nagios3/conf.d/commands.cfg
+nagios | Service definition to call plugin      | /etc/nagios3/conf.d/hosts/uranus.cfg
+
+### Enable Nagios to Run Plugins with sudo
+In cases we use commands in our plugins that need to be run with sudo we have
+to do configure the remote host as shown in the table below.
+
+File                 | Configuration
+-------------------- | -------------------------------------------------------------------------------
+/etc/nagios/nrpe.cfg | uncomment `# command_prefix=/usr/bin/sudo`
+/etc/sudoers         | add `nagios ALL=(ALL) NOPASSWD:/path/to/plugin,/path/to/command/that/needs/sudo`
+
+Note: Be aware that it is recommended to edit `/etc/sudoers` with `visudo` 
+otherwise you risk to mess up your /etc/sudoers file. In case you do so you can
+recover with `pkexec visudo` 
+
+Using NRPE with Parameter Passing
+---------------------------------
+Up to now we used NRPE with fixed parameters. In case we need to change the 
+plugin name we we would have to do that on the Nagios server and on the remote
+host. In our current example we have used `check_passenger` to check up the
+application *apptrack*. 
+
+    command[check_passenger_memory]=/usr/lib/nagios/plugins/check_passenger \
+    -m apptrack -w 150 -c 200
+
+We also want to check up *secondhand* to do this we have to add another command 
+to `/etc/nagios/nrpe.cfg`
+
+    command[check_passenger_secondhand_memory]=/usr/lib/nagios/plugins/\
+    check_passenger -m secondhand -w 150 -c 200
+
+On Nagios we would add a second service definition to 
+`/etc/nagios3/conf.d/hosts/uranus.pp`
+  
+    define service {
+      use                generic-service
+      host_name          uranus
+      service_descripton Passenger memory
+      check_command      check_nrpe_1arg!check_passenger_memory
+    }
+
+    define service {
+      use                generic-service
+      host_name          uranus
+      service_descripton Passenger secondhand memory
+      check_command      check_nrpe_1arg!check_passenger_secondhand_memory
+    }
+
+If someone else reads this it looks like the first service is checking the
+total memory and the second is checking the secondhand specific memory. This is
+not a real issue but in order to make it more clear what we are checking we
+should rename our first service according to what it is really checking 
+`Passenger apptrack memory`. But we can do better but be warned with a seurity 
+risk.
+
 
 Directory Structure
 ===================
