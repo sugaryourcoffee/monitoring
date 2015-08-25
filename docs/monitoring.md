@@ -8,13 +8,31 @@ monitoring server with a VirtualBox. We will follow these steps
 * Install Nagios on the box
 * Configure monitoring
 
+We will work on differnt machines and to indicate on which machine we are 
+invoking commandline commads we show a prompt like this
+
+    machine$ echo "We are on machine"
+
+The machines we are using is shown in the following table
+
+Machine    | Task
+---------- | ------------------------------------------------------------
+saltspring | development hosting the nagios server run in Virtualbox
+nagios     | Nagios server in Virtualbox hosted by saltspring
+uranus     | Puppet server and server hosting the apptrack and secondhand 
+staging Rails applications
+mercury    | Server hosting secondhand Rails application
+
 Used Software
 =============
-We will use different software packages to create and manage our box
+We will use different software packages throughout the setup process
 
 * VirtualBox
 * Vagrant
 * Puppet
+* Nagios
+* tmux
+* Bash
 
 Create a Directory
 ==================
@@ -23,7 +41,7 @@ But to be precise we try to document each step
 
 First we create a directory where to host our monitoring system
 
-    $ mkdir -p Monitoring/{docs,nagios,scripts}
+    saltspring$ mkdir -p Monitoring/{docs,nagios,scripts}
 
 Working Environment
 ===================
@@ -32,8 +50,8 @@ everything we need on the desktop. For that to do we use _tmux_. We will have
 a window with four panes. We start a new tmux session with the name _monitoring_
 in the directory `monitoring`.
 
-    $ cd ~/Monitoring
-    $ tmux new -s monitoring
+    saltspring$ cd ~/Monitoring
+    saltspring$ tmux new -s monitoring
 
 Within the tmux session we create 4 panes with `CTRL` `"` and `CTRL` `%`
 
@@ -72,8 +90,8 @@ differnt box.
 
 After we have installed VirtualBox and Vagrant we can create our box with
 
-    $ cd ~/Monitoring/nagios
-    $ vagrant init ubuntu/trusty64
+    saltspring$ cd ~/Monitoring/nagios
+    saltspring$ vagrant init ubuntu/trusty64
 
 This will create a Vagrantfile with a basic configuration. We supplement the
 Vagrantfile as follows
@@ -94,12 +112,12 @@ vb.memory and vb.cpus you can change to what is possible with your machine.
 you call this command the box is created. Subsequent calls of `vagrant up` will
 use the created box and start it up.
 
-    $ vagrant up
+    saltspring$ vagrant up
 
 ## SSH to the box
 You can SSH to the box with
 
-    $ vagrant ssh
+    saltspring$ vagrant ssh
 
 Manage installation configuration with Puppet
 =============================================
@@ -119,18 +137,19 @@ least the puppetmaster has to have the version number of puppet client.
 
 To install puppet on the client we call
 
-    $ sudo apt-get puppet
+    nagios$ sudo apt-get puppet
 
 To install puppetmaster on the server we ssh to the server and than install 
 puppetmaster
 
-    $ sudo apt-get puppetmaster
+    uranus$ sudo apt-get puppetmaster
 
 This will also install additonal packages.
 
 We can check the version with
 
-    $ puppet --version
+    nagios$ puppet --version
+    uranus$ puppet --version
 
 ## Configure Puppet master
 On the puppetmaster machine (uranus) add the server directive to 
@@ -143,7 +162,7 @@ doesn't exists you can just add it.
 In `/etc/puppet/manifests/site.pp` we describe the configuration for the 
 clients. If it is not available we create an empty file
 
-    $ sudo touch /etc/puppet/manifests/site.pp
+    uranus$ sudo touch /etc/puppet/manifests/site.pp
 
 For each of our servers we want to provision with Puppet we need to create a
 node in site.pp. Our Nagios server has the URL _nagios.fritz.box_, so we add
@@ -156,18 +175,18 @@ Puppet is listening on port 8140. In order clients can connect to puppetmaster
 the port 8140 has to be open. We can check with `netstat -anltp` whether the
 port 8140 is open.
 
-    $ sudo netstat -anltp
+    uranus$ sudo netstat -anltp
 
 We can open the port with `iptables`
 
-    $ sudo iptables -A INPUT -p tcp -m state --state NeW -s 192.168.178.0/24 \
+    uranus$ sudo iptables -A INPUT -p tcp -m state --state NeW -s 192.168.178.0/24 \
     --dport 8140 -j ACCEPT
 
 To see whether the rule is effective we can use `sudo iptables -L`.
 
 If all is set up we can start puppetmaster
 
-    $ service puppetmaster start
+    uranus$ service puppetmaster start
      * starting puppet master
        ...done
 
@@ -180,7 +199,7 @@ The next step is to check whether we can connect to the puppetmaster with
 following command on the client machine. This will also create a certification
 request if no certificate is available.
 
-    $ sudo puppet agent --test --server=uranus.fritz.box
+    nagios$ sudo puppet agent --test --server=uranus.fritz.box
 
 Note: In order to install packages, which ultimately runs `apt-get install` we
 have to run puppet with `sudo`
@@ -188,12 +207,12 @@ have to run puppet with `sudo`
 Note: If you add the IP-address of uranus.fritz.box and assign it to puppet in 
 _/etc/hosts_ you don't need the server directive.
 
-    $ sudo vi /etc/hosts
+    nagios$ sudo vi /etc/hosts
     192.168.178.66 puppet
 
 Now we can connect to the server with
 
-    $ sudo puppet agent --test
+    nagios$ sudo puppet agent --test
 
 If you see an output 
 `Exiting: no certificate found and waitforcert is dispabled` then the your 
@@ -201,34 +220,34 @@ client has requested a certifcate but it has not been created.
 
 To create it we ssh to our server uranus
 
-    $ ssh uranus
+    nagios$ ssh uranus
 
 and look for waiting certification requests
 
-    $ sudo puppet cert --list
+    uranus$ sudo puppet cert --list
 
 We can certify the certification requests with
 
-    $ sudo puppet cert sign nagios.fritz.box
+    uranus$ sudo puppet cert sign nagios.fritz.box
 
 Back in the client a call to `puppet agent --test` should indicate that the
 certification request has been aproved.
 
 Install Nagios on the box
 =========================
-To install Nagios we create a Puppet module.
+To install Nagios we create a Puppet module on the Puppet server.
 
 On our Puppet server we create a directory `/etc/puppet/modules` and `cd` to it
 
-    $ cd /etc/puppet
-    $ mkdir modules
-    $ cd modules
+    uranus$ cd /etc/puppet
+    uranus$ mkdir modules
+    uranus$ cd modules
 
 Now we create a module structure for Nagios by using the Puppet 
 `module generate` command.
 
-    $ puppet module generate sugaryourcoffee-nagios
-    $ mv sugaryourcoffee-nagios nagios
+    uranus puppet module generate sugaryourcoffee-nagios
+    uranus mv sugaryourcoffee-nagios nagios
 
 If we would push our module to _Puppet Forge_ we would have to use our 
 company name _sugaryourcoffe_ but for the module we need to have the pure 
@@ -238,17 +257,17 @@ Now is a good time to start managing our Puppet modules with _Git_. In
 `/etc/puppet/modules`. To do this we give the write permissions to the user for 
 `/etc/puppet/modules/` and initialize our Git repository.
 
-    $ sudo chgrp -R pierre /etc/puppet/modules
-    $ sudo chmod -R g+w /etc/puppet/modules
-    $ git init
-    $ git add .
-    $ git commit -am "Initial commit"
+    uranus sudo chgrp -R pierre /etc/puppet/modules
+    uranus sudo chmod -R g+w /etc/puppet/modules
+    uranus git init
+    uranus git add .
+    uranus git commit -am "Initial commit"
 
 We create a Git repository on [Github](https://github.com) and add the remote
 repository and push it to Github.
 
-    $ git remote add origin git@github.com:sugaryourcoffee/puppet-server.git
-    $ git push -u origin master
+    uranus git remote add origin git@github.com:sugaryourcoffee/puppet-server.git
+    uranus git push -u origin master
 
 Now back to Puppet. The scaffolding of our module has created a bare 
 `nagios/manifests/init.pp` file we rename to 'nagios/manifests/server.pp` and 
@@ -299,9 +318,9 @@ to install Nagios on our Nagios server, that is the Vagrant box. But before we
 do so we update our repository. If we don't it might happen that we get the 
 error message that Ubuntu's repository server cannot be found.
 
-    $ sudo apt-get update
-    $ sudo apt-get upgrade
-    $ sudo puppet agent --test
+    nagios$ sudo apt-get update
+    nagios$ sudo apt-get upgrade
+    nagios$ sudo puppet agent --test
     Info: Retrieving plugin
     Info: Caching catalog for nagios.fritz.box
     Info: Applying configuration version '1439316179'
@@ -311,7 +330,7 @@ error message that Ubuntu's repository server cannot be found.
 
 We can check that Nagios is installed with
 
-    $ sudo dpkg --get-selections | grep nagios
+    nagios$ sudo dpkg --get-selections | grep nagios
     nagios-images                         install
     nagios-plugins                        install
     nagios-plugins-basic                  install
@@ -330,9 +349,9 @@ host. As we are working with Puppet we will manage this file also with Puppet.
 At first copy the file to the Puppet server and then on the Puppet server to
 '/etc/puppet/modules/files'
 
-    $ scp /etc/nagios3/apache2.conf pierre@uranus:apache2.conf
-    $ ssh uranus 
-    $ sudo cp apache2.conf /etc/puppet/modules/nagios/files/
+    nagios$ scp /etc/nagios3/apache2.conf pierre@uranus:apache2.conf
+    nagios$ ssh uranus 
+    uranus$ sudo cp apache2.conf /etc/puppet/modules/nagios/files/
 
 Note: If the directory '/etc/puppet/modules/nagios/files/' doesn't exist you 
 have to create it first with 'sudo mkdir /etc/puppet/modules/nagios/files/'
@@ -368,16 +387,16 @@ In order to access the Nagios interface we need a login and password. The
 credentials (login and password) have to be created with `htpasswd` which is a
 Apache 2 tool. On our Nagios server we create the credentials file with
 
-    $ sudo -cmb /etc/nagios3/htpasswd.users nagiosadmin nagios
+    nagios$ sudo -cmb /etc/nagios3/htpasswd.users nagiosadmin nagios
 
 We copy the file to the Puppet server uranus with
 
-    $ scp /etc/nagios3/htpasswd.users pierre@uranus:htpasswd.users
+    nagios$ scp /etc/nagios3/htpasswd.users pierre@uranus:htpasswd.users
 
 and copy it to the files directory of our Puppet nagios module
 
-    $ ssh uranus
-    $ sudo mv ~/htpasswd.users /etc/puppet/modules/nagios/files/
+    nagios$ ssh uranus
+    uranus$ sudo mv ~/htpasswd.users /etc/puppet/modules/nagios/files/
 
 Now we have all files in place and we are ready to fill in the content to our 
 '/etc/puppet/modules/nagios/manifests/config.pp' file.
@@ -406,8 +425,8 @@ _nagios::server::config_ directive.
 
 On our Puppet server we create an Apache 2 module in `/etc/puppet/modules/`
 
-    $ sudo puppet module generate sugaryourcoffee-apache
-    $ sudo mv sugaryourcoffee-apache apache
+    uranus$ sudo puppet module generate sugaryourcoffee-apache
+    uranus$ sudo mv sugaryourcoffee-apache apache
 
 We open `/etc/puppet/modules/apache/manifests/init.pp` and add
 
@@ -447,7 +466,7 @@ As a final step we have to add _apache_ to our `/etc/puppet/manifests/site.pp`
 
 Back on our host machine where the Nagios server lives we call
 
-    $sudo puppet agent --test
+    nagios$sudo puppet agent --test
 
 and we should see the updated file `/etc/nagios/apache2.conf` and the file
 `/etc/nagios/htpasswd.users`.
@@ -455,13 +474,13 @@ and we should see the updated file `/etc/nagios/apache2.conf` and the file
 To access Apache 2 we have to forward a port from our host to the VirtualBox. 
 On the host we then add following to the Vagrantfile
 
-    $ vi Vagrantfile
+    saltspring$ vi Vagrantfile
     config.vm.network "forwarded_port", guest: 80, host: 4567
 
 In order that the changes in the Vagrantfile are recognized by VirtualBox we
 have to reload the box
 
-    $ vagrant reload
+    saltspring$ vagrant reload
 
 From a browser you should see the default Apache 2 website with 
 `localhost:4567` and to access the nagios interface we add the URL
@@ -481,9 +500,9 @@ Nagios configuration takes place in the `/etc/nagios3/nagios.cfg` file. We will
 manage that file with Puppet. To do so we first copy the file into the
 `/etc/puppet/modules/nagios/files/` directory.
 
-    $ scp /etc/nagios3/nagios.cfg pierre@uranus:nagios.cfg
-    $ ssh uranus
-    $ mv nagios.cfg /etc/puppet/modules/nagios/files/
+    nagios$ scp /etc/nagios3/nagios.cfg pierre@uranus:nagios.cfg
+    nagios$ ssh uranus
+    uranus$ mv nagios.cfg /etc/puppet/modules/nagios/files/
 
 To manage `nagios.cfg` we add following to 
 `/etc/puppet/modules/manifests/config.pp`
@@ -527,7 +546,7 @@ resource. We add these resources to
 
 Now back on the nagios server we issue
 
-    $ sudo puppet agent --test
+    uranus$ sudo puppet agent --test
 
 And the file permissions should be set as requested and the user _www-data_
 should be in the group _nagios_. We can check that it works by rescheduling a
@@ -536,15 +555,15 @@ service in the Nagios web interface.
 The Nagios configuration files live in `/etc/nagios3/conf.d/`. We will manage
 these with puppet and copy them to our Puppet server. 
 
-    $ scp /etc/nagios3/conf.d/localhost_nagios2.cfg \
+    nagios$ scp /etc/nagios3/conf.d/localhost_nagios2.cfg \
     pierre@uranus:localhost_nagios.cfg
 
 We create a directory where we want to manage all configuration files
 
-    $ ssh uranus
-    $ cd /etc/puppet
-    $ sudo mkdir -p modules/nagios/files/conf.d/hosts
-    $ sudo mv ~/*.cfg /etc/puppet/modules/files/conf.d/hosts/
+    nagios$ ssh uranus
+    uranus$ cd /etc/puppet
+    uranus$ sudo mkdir -p modules/nagios/files/conf.d/hosts
+    uranus$ sudo mv ~/*.cfg /etc/puppet/modules/files/conf.d/hosts/
 
 We add additonal resources to `/etc/puppet/modules/nagios/manifests/config.pp`
 to manage the configuration files.
@@ -671,13 +690,13 @@ In order the clients get recognized we have to add them to
 
 Now we install NRPE on the Nagios server with
 
-    $ sudo puppet agent --test
+    nagios$ sudo puppet agent --test
 
 The same we have to do on the remote host, that is _uranus_ which happens 
 to be the same machine as our Puppet server. In this case we will use
 `puppet apply` instead using `sudo puppet agent --test`
 
-    $ sudo puppet apply /etc/puppet/manifests/site.pp
+    uranus$ sudo puppet apply /etc/puppet/manifests/site.pp
     Notice: Compiled catalog for uranus.fritz.box in environment production in 
     0.08 seconds
     Info: Applying configuration version '1439810753'
@@ -690,7 +709,7 @@ to be the same machine as our Puppet server. In this case we will use
 If we run `dpkg --get-selections | grep nagios` we will see that the packages
 have been installed
 
-    $ dpkg --get-selections | grep nagios
+    uranus$ dpkg --get-selections | grep nagios
     nagios-nrpe-server                              install
     nagios-plugins                                  install
     nagios-plugins-basic                            install
@@ -700,7 +719,7 @@ have been installed
 Now that we have NRPE installed we will find a configuration file `nrpe.cfg`in 
 `/etc/nagios/nrpe.cfg`. We copy that file to our Puppet files folder
 
-    $ sudo cp /etc/nagios/nrpe.cfg /etc/puppet/modules/nagios/files/
+    uranus$ sudo cp /etc/nagios/nrpe.cfg /etc/puppet/modules/nagios/files/
 
 In that file we can tell NRPE which hosts are allowed to access the services.
 Make following change to `nrpe.cfg`
@@ -736,7 +755,7 @@ We also have to supplement `/etc/puppet/modules/nagios/manifests/client.pp`
 
 To get everything in place we run
 
-    $ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
+    uranus$ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
 
 Now _uranus_ is listening for requests from our Nagios server. To see whether
 we can retrieve information from _uranus_ we issue following command
@@ -793,7 +812,7 @@ information. We put the script into `/usr/lib/nagios/plugins/check_passenger`.
 
 The usage of passenger is
 
-    $ check_passenger [options]
+    uranus$ check_passenger [options]
 
 The options are explained in the table below.
 
@@ -813,7 +832,7 @@ Flag |             | Parameter | Description
 
 Example of invoking `check\_passenger`
 
-    $ ./check_passenger -r secondhand -w 50 -c 100
+    uranus$ ./check_passenger -r secondhand -w 50 -c 100
 
 The script can be found [check_passenger](https://github.com/sugaryourcoffee/monitoring/blob/master/scripts/check_passenger). 
 
@@ -843,7 +862,7 @@ which in turn needs to be run with rvmsudo, we have to add user nagios to the
 `/etc/sudoers.d/nagios-permissions`. For editing _sudoers_ files it is 
 recommended to use _visudo_.
 
-    $ sudo visudo -f /etc/sudoers.d/nagios-permissions
+    uranus$ sudo visudo -f /etc/sudoers.d/nagios-permissions
 
 This will open the _nano_ editor with `nagios.tmp`. Then we add following 
 content
@@ -864,9 +883,9 @@ To get this file managed with Puppet copy it to
 `/etc/puppet/modules/nagios/files/` and change the file permissions so we can
 add them to our Git repository.
 
-    $ sudo cp /etc/sudoers.d/nagios-permissions \
+    uranus$ sudo cp /etc/sudoers.d/nagios-permissions \
               /etc/puppet/modules/nagios/files/
-    $ sudo chgrp pierre /etc/puppet/modules/nagios/files/nagios-permissons
+    uranus$ sudo chgrp pierre /etc/puppet/modules/nagios/files/nagios-permissons
 
 and add a file source to `/etc/puppet/modules/nagios/manifests/client/config.pp`
 
@@ -883,16 +902,16 @@ and uncomment `command_prefix=/usr/bin/sudo`
 In order to make the changes available we have to restart the 
 _nagios-nrpe-server_ with
 
-    $ sudo service nagios-nrpe-server restart
+    uranus$ sudo service nagios-nrpe-server restart
 
 But this will be done by Puppet after our last step. So keep patient.
 
 ### Manage check\_passenger by Puppet
 We create a new directory `plugins`where we put check\_passenger to
 
-    $ cd /etc/puppet/modules/nagios
-    $ mkdir files/plugins
-    $ cp /usr/lib/nagios/plugins/check_passenger files/plugins/
+    uranus$ cd /etc/puppet/modules/nagios
+    uranus$ mkdir files/plugins
+    uranus$ cp /usr/lib/nagios/plugins/check_passenger files/plugins/
    
 ### Add check\_passenger File Resource to client/config.pp
 In order to get *check_passenger* in place we create a file resource in
@@ -984,16 +1003,16 @@ view is the remote host. So we have to run puppet on *nagios* and on *uranus*.
 
 On *nagios* we run
 
-    $ sudo puppet agent --test
+    nagios$ sudo puppet agent --test
 
 and on *uranus* we run
 
-    $ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
+    uranus$ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
 
 When we look at the Nagios web interface we should see the new service. We can
 also check on our Nagios server whether we can invoke our new plugin with
 
-    $ /usr/lib/nagios/plugins/check_nrpe -H uranus -c check_passenger_memory
+    nagios$ /usr/lib/nagios/plugins/check_nrpe -H uranus -c check_passenger_memory
     Passenger apptrack memory OK - 72M used
 
 Note: If you get an error saying 
@@ -1042,7 +1061,7 @@ to `/etc/nagios/nrpe.cfg`
     command[check_passenger_secondhand_memory]=/usr/lib/nagios/plugins/\
     check_passenger -m secondhand -w 150 -c 200
 
-On Nagios we would add a second service definition to 
+On the Nagios server we would add a second service definition to 
 `/etc/nagios3/conf.d/hosts/uranus.pp`
   
     define service {
@@ -1087,9 +1106,18 @@ Along with this change we also have to change our command in
     command[check_passenger_apptrack_memory]=/usr/lib/nagios/plugins/\
     check_passenger -m apptrack -w 150 -c 200
 
-But we can do better but be warned with a security risk.
+To get the changes to work we have to call Puppet on the Nagios server *nagios*
+and on the remote host *uranus*.
 
-To enable parameter passing with NRPE we have to follow these steps
+    uranus$ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
+    nagios$ sudo puppet agent --test
+
+But we can do better but be warned with a security risk. You can read about
+the security risk at 
+[legalhackers.com](http://legalhackers.com/advisories/nagios-nrpe.txt)
+
+Just for completeness we enable parameter passing with NRPE. To do so we have 
+to follow these steps (but actually we don't do it).
 
 * Set `dont_blame_me=1` in /etc/nagios/nrpe.cfg on the remote host *uranus*
 * Add the command `command[check_passenger]=/usr/lib/nagios/plugins/\
