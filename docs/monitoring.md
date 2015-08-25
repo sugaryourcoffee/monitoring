@@ -1,5 +1,5 @@
-Monitoring an Application
-=========================
+Monitoring an Application with Nagios
+=====================================
 We want to monitor the Secondhand application with Nagios. We will create a 
 monitoring server with a VirtualBox. We will follow these steps
 
@@ -1203,36 +1203,36 @@ Directory Structure
 -------------------
 Our Puppet directory structure looks like this now
 
-nagios 
-├── files
-│   ├── apache2.conf
-│   ├── conf.d
-│   │   ├── commands.cfg
-│   │   └── hosts
-│   │       ├── dyndns.cfg
-│   │       ├── localhost_nagios.cfg
-│   │       ├── mercury.cfg
-│   │       └── uranus.cfg
-│   ├── htpasswd.users
-│   ├── nagios.cfg
-│   ├── nagios-permissions
-│   ├── nrpe.cfg
-│   └── plugins
-│       └── check_passenger
-├── manifests
-│   ├── client
-│   │   ├── config.pp
-│   │   └── install.pp
-│   ├── client.pp
-│   ├── server
-│   │   ├── config.pp
-│   │   ├── install.pp
-│   │   └── service.pp
-│   └── server.pp
-├── Modulefile
-├── README
-├── spec
-│   └── spec_helper.rb
-└── tests
-    └── init.pp
+    nagios 
+    ├── files
+    │   ├── apache2.conf
+    │   ├── conf.d
+    │   │   ├── commands.cfg
+    │   │   └── hosts
+    │   │       ├── dyndns.cfg
+    │   │       ├── localhost_nagios.cfg
+    │   │       ├── mercury.cfg
+    │   │       └── uranus.cfg
+    │   ├── htpasswd.users
+    │   ├── nagios.cfg
+    │   ├── nagios-permissions
+    │   ├── nrpe.cfg
+    │   └── plugins
+    │       └── check_passenger
+    ├── manifests
+    │   ├── client
+    │   │   ├── config.pp
+    │   │   └── install.pp
+    │   ├── client.pp
+    │   ├── server
+    │   │   ├── config.pp
+    │   │   ├── install.pp
+    │   │   └── service.pp
+    │   └── server.pp
+    ├── Modulefile
+    ├── README
+    ├── spec
+    │   └── spec_helper.rb
+    └── tests
+        └── init.pp
 
