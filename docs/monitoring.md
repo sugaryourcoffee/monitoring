@@ -1134,7 +1134,7 @@ We do another check for *secondhand* with
     /usr/lib/nagios/plugins/check_nrpe -H uranus -c check_passenger_memory \
     -a secondhand 150 200
 
-### Copy nrpe to Puppet
+### Copy nrpe.cfg to Puppet
 If the command can be invoked we copy nrpe.cfg to the Puppet directory in order
 it gets managed by Puppet.
 
