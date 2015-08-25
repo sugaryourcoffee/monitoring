@@ -34,6 +34,7 @@ The software packages we will use during setting up Ganglia are listed below.
 * Vagrant
 * Puppet
 * Ganglia
+* Git
 * tmux
 
 We asume that VirtualBox, Vagrant and Puppet (client/server) are already 
@@ -67,7 +68,122 @@ created and create a new box with `vagrant init` command.
     saltspring$ cd ~/Monitoring/ganglia
     saltspring$ vagrant init ubuntu/trusty64
 
-The Vagrantfile that will be created needs to be teaked a little. Change the 
+The Vagrantfile that will be created needs to be tweaked a little. Change the 
 Vagrant file so it will look like this.
 
-    
+    VAGRANTFILE_API_VERSION = "2"
+
+    Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+      config.vm.box = "ubuntu/trusty64"
+      config.vm.hostname = "ganglia"
+      config.vm.network "forwarded_port", guest: 80, host: 4568
+    end 
+
+Now run `vagrant up` to create the box.
+
+    saltspring$ vagrant up
+
+We can now SSH to the box with
+
+    saltsprint$ vagrant ssh
+
+Next we install Ganglia on the box using Puppet.
+
+Manage Ganglia with Puppet
+==========================
+We will install and manage Ganglia with Puppet. For that we need to install
+Puppet client on our freshly created Ganglia box and Puppet master on our
+Puppet server. How that can be done can be found in a little more detailed 
+version at [Install Puppet](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#install-puppet). To install Puppet client on your 
+Ganglia server call
+
+    ganglia$ sudo apt-get install puppet
+
+To prove that the installation went well we can ask for the version of Puppet
+
+    ganglia$ puppet --version
+    3.4.3
+
+Create a Ganglia Puppet Module
+------------------------------
+Puppet server is already running, so we can just head into creating a Puppet 
+module for Ganglia. First we add a node to `/etc/puppet/manifests/site.pp` on 
+our Puppet server *uranus*.
+
+    node 'ganglia.firtz.box' {
+    } 
+
+### Prepare the Puppet Client ganlia
+In order to provision our Ganglia server we have to request a certificate from
+our Puppet server. To do this we assign the IP address of our Puppet server
+*uranus* to the name *puppet* in `/etc/hosts`. Add following line into
+`/etc/hosts` on your Ganglia server
+
+    ganglia$ sudo vi /etc/hosts
+    192.168.178.66 puppet
+
+No request the certificate from your Puppet server with
+
+    ganglia$ sudo puppet agent --test
+    vagrant@ganglia:~$ sudo puppet agent --test
+    Info: Creating a new SSL key for ganglia.fritz.box
+    Info: Caching certificate for ca
+    Info: csr_attributes file loading from /etc/puppet/csr_attributes.yaml
+    Info: Creating a new SSL certificate request for ganglia.fritz.box
+    Info: Certificate Request fingerprint (SHA256): 
+    C8:14:9A:2D:D6:5A:75:44:48:82:EA
+    :D2:09:19:47:80:27:2A:C5:21:A4:D6:43:89:47:49:2D:1F:AC:94:F4:04
+    Info: Caching certificate for ca
+    Exiting; no certificate found and waitforcert is disabled 
+
+The last line indicates that a request is waiting for certification. To create
+the certificate we head over to our Puppet server and call
+
+    uranus$ sudo puppet cert --list
+      "ganglia.fritz.box"  (SHA256) C8:14:9A:2D:D6:5A:75:44:48:82:EA:D2:09:19:47:80:27:2A:C5:21:A4:D6:43:89:47:49:2D:1F:AC:94:F4:04 
+      
+to look for waiting certificates. To certify the request we issue
+
+    uranus$ sudo puppet cert sign ganglia.fritz.box
+
+Back on our Ganglia server issuing the command should indicate that our 
+certification request has been aproved.
+
+    ganglia$ sudo puppet agent --test
+    Info: Caching certificate for ganglia.fritz.box
+    Info: Caching certificate_revocation_list for ca
+    Info: Caching certificate for ganglia.fritz.box
+    Notice: Skipping run of Puppet configuration client; administratively 
+    disabled (Reason: 'Disabled by default on new installations');
+    Use 'puppet agent --enable' to re-enable.
+
+The last line says to run
+
+    ganglia$ puppet agent --enable
+
+Then another run of `sudo puppet agent --test` will show an error that the 
+catalog could not be found. But that is o.k. for now as we don't have a module
+yet.
+
+    ganglia$ puppet agent --test
+    Info: Retrieving plugin
+    Notice: /File[/var/lib/puppet/lib]/mode: mode changed '0755' to '0775'
+    Error: Could not retrieve catalog from remote server: Error 400 on SERVER: 
+    Could not find default node or by name with 'ganglia.fritz.box, 
+    ganglia.fritz, ganglia' on node ganglia.fritz.box
+    Warning: Not using cache on failed catalog
+    Error: Could not retrieve catalog; skipping run
+
+### Create the Puppet Module
+Now we create a Puppet module for Ganglia. On the Puppet server *uranus* we
+change to `/etc/puppet/modules` and create a new Puppet module that we name
+ganglia.
+
+    uranus$ cd /etc/puppet/modules
+    uranus$ puppet module generate sugaryourcoffee-ganglia
+    uranus$ mv sugaryourcoffee-ganglia ganglia
+
+Now is a good time to commit our new module to Git. How this is done can be
+found at [Install Nagios on the box](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#install-nagios-on-the-box).
+
+
