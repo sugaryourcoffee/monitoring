@@ -113,7 +113,7 @@ our Puppet server *uranus*.
     node 'ganglia.firtz.box' {
     } 
 
-### Prepare the Puppet Client ganlia
+### Prepare the Puppet Client Ganglia
 In order to provision our Ganglia server we have to request a certificate from
 our Puppet server. To do this we assign the IP address of our Puppet server
 *uranus* to the name *puppet* in `/etc/hosts`. Add following line into
@@ -208,7 +208,7 @@ command
 
 Ganglia is collecting data from servers and can display them in a Ganglia web
 interface. On the Ganglia server we need to install *ganglia-webfrontend* and 
-*gmetad*. *ganlia-webfrontend* will also install *gmetad*. *gmetad* collects 
+*gmetad*. *ganglia-webfrontend* will also install *gmetad*. *gmetad* collects 
 the data from the server and *ganglia-webfrontend* displays the data. 
 *ganlia-monitor*, respectively the containing application *gmond* is collecting
 data on the servers and provides them to *gmetad*. That is every server we
@@ -291,7 +291,7 @@ Before we run Puppet we have to add `ganglia::server::config` to
       Class['ganglia::server']
     }
 
-A last step is to import our Apache modue to our Ganlia node in 
+A last step is to import our Apache module to our Ganglia node in 
 `/etc/puppet/manifests/site.pp`. 
 
     node 'ganglia.fritz.box' {
