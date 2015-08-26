@@ -1,8 +1,8 @@
-Collecting Applicatin Metrics with Ganglia
-==========================================
+Collecting Application Metrics with Ganglia
+===========================================
 After we have setup a Nagios server for monitoring our servers and applications
-we also want to collect metrics to realize changes in the loads over time to get
-a good indication on potential problems that may occur in the future. An
+we also want to collect metrics to recognize changes in the loads over time to 
+get a good indication of potential problems that may occur in the future. An
 application for collecting metrics is Ganglia that we want to use for that 
 purpose.
 
@@ -185,5 +185,126 @@ ganglia.
 
 Now is a good time to commit our new module to Git. How this is done can be
 found at [Install Nagios on the box](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#install-nagios-on-the-box).
+
+Ganglia consist of several software packages where we will install not all of
+them. To see what is available on Ubuntu 14.04LTS we can issue following
+command
+
+    ganglia$ sudo apt-cache search ganglia
+    collectd-core - statistics collection and monitoring daemon (core system)
+    ganglia-modules-linux - Ganglia extra modules for Linux (IO, filesystems, 
+    multicpu)
+    ganglia-monitor - cluster monitoring toolkit - node daemon
+    ganglia-monitor-python - cluster monitoring toolkit - python modules
+    ganglia-nagios-bridge - cluster monitoring toolkit - scalable Nagios 
+    integration
+    ganglia-webfrontend - cluster monitoring toolkit - web front-end
+    gmetad - cluster monitoring toolkit - Ganglia Meta-Daemon
+    libganglia1 - cluster monitoring toolkit - shared libraries
+    libganglia1-dev - cluster monitoring toolkit - development libraries
+    libgmetric4j-java - gmetric4j Ganglia metric transmission API
+    libjmxetric-java - JMXetric Ganglia metric transmission API
+    logster - Generate metrics from logfiles for Graphite and Ganglia
+
+Ganglia is collecting data from servers and can display them in a Ganglia web
+interface. On the Ganglia server we need to install *ganglia-webfrontend* and 
+*gmetad*. *ganlia-webfrontend* will also install *gmetad*. *gmetad* collects 
+the data from the server and *ganglia-webfrontend* displays the data. 
+*ganlia-monitor*, respectively the containing application *gmond* is collecting
+data on the servers and provides them to *gmetad*. That is every server we
+want to collect data from we need to install *ganglia-monitor* on. As we want 
+to also monitor our Ganglia server we have to install *ganglia-monitor* on the 
+servers (clients) and on the Ganglia server (server).
+
+### Install Ganglia on the Server
+From the above information we can derive that we need Puppet modules for server
+and clients. We first start with the server class and then create an install 
+module.
+
+Now create a server.pp file in `/etc/puppet/modules/ganglia/manifests/server.pp`
+with following content.
+
+    class ganglia::server {
+      class { '::ganglia::server::install': } ->
+      Class['ganglia::server']
+    }
+
+Create a directory `/etc/puppet/modules/ganglia/manifests/server/`
+
+    uranus$ mkdir /etc/puppet/modules/ganglia/manifests/server
+    
+and create a file `install.pp` in that directory with following content
+
+    class ganglia::server::install {
+      package { ["ganglia-monitor", "ganglia-webfrontend"]:
+        ensure => installed,
+      }
+    }
+
+In order the `ganglia::server::install` class gets invoked we have to add a 
+respective node to `/etc/puppet/manifests/site.pp`
+
+    node 'ganglia.fritz.box' {
+      include ::ganglia::server
+    }
+
+The next step is to install Ganglia which will install configuration files that
+we need for further configuration. So we run Puppet from the Ganglia server.
+
+    ganglia$ sudo puppet agent --test
+
+After the installation we have two new directories `/etc/ganglia/` and
+`/etc/ganglia-webfrontend/`. We can invoke `gmond` and `gmetad` on the command
+line.
+
+    ganglia$ gmond -V
+    gmond 3.6.0 
+    ganglia$ gmetad -V
+    gmetad 3.6.0
+
+The directory `/etc/ganglia-webfrontend` contains an Apache configuration file 
+`/etc/ganglia-webfrontend/apache.conf` that we have to make available to Apache 
+so it gets loaded when Apache starts up. For that to happen we create a link in
+`/etc/apache2/conf-available/` to that file and run Apache's `a2enconf`. We 
+have to start `a2enconf` whenever we change that file. Let's add 
+`/etc/puppet/modules/ganglia/manifests/server/config.pp` with following content.
+
+    class ganglia::server::config {
+      file { "/etc/apache2/conf-available/ganglia.conf":
+        ensure => link,
+        target => "/etc/ganglia-webfrontend/apache.conf",
+      }
+
+      exec { "enable-ganglia-apache.conf":
+        command => "/usr/sbin/a2enconf -q ganglia",
+        require => File["/etc/apache2/conf-available/ganglia.conf"],
+        notify  => Class["apache::service"],
+      }
+    }
+
+Before we run Puppet we have to add `ganglia::server::config` to 
+`/etc/puppet/ganglia/manifests/server.pp`.
+
+    class ganglia::server {
+      class { '::ganglia::server::install': } ->
+      class { '::ganglia::server::config':  } ->
+      Class['ganglia::server']
+    }
+
+A last step is to import our Apache modue to our Ganlia node in 
+`/etc/puppet/manifests/site.pp`. 
+
+    node 'ganglia.fritz.box' {
+      include ::ganglia::server
+      include ::apache
+    }
+
+Now we run Puppet on the Ganglia server to get the files in place.
+
+    ganglia$ sudo puppet agent --test
+
+The Ganglia web interface should now be available at 
+[localhost:4568/ganglia](http://localhost:4568/ganglia). But currently we are
+not collecting any metrics. For that we have to configure *gmond.conf*.
 
 
