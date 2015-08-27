@@ -312,11 +312,12 @@ The Ganglia web interface should now be available at
 [localhost:4568/ganglia](http://localhost:4568/ganglia). 
 
 ### Configure Ganglia
-But currently we are not collecting any metrics. For that we have to configure 
-*gmond* and *gmetad*. *gmond* lives on any server where we want to collect 
-data from. So this is also on the Ganglia server as we want to also monitor 
-our Ganglia server. *gmetad* is responsible to collect the data from the 
-monitored servers and provides the data to the Ganglia web interface.
+Currently we are collecting metrics but we are using the defaults, e.g. without
+a cluster name. We want to adopt the configuration to our system. For that we 
+have to configure *gmond* and *gmetad*. *gmond* lives on any server where we 
+want to collect data from. So this is also on the Ganglia server as we want to 
+also monitor our Ganglia server. *gmetad* is responsible to collect the data 
+from the monitored servers and provides the data to the Ganglia web interface.
 
 To configure *gmond* we have to make some changes to *gmond.conf* as follows.
 
@@ -328,6 +329,11 @@ The configuration of *gmetad* has to be done in *gmetad.conf* as outlined below.
 
 * Add a data source for each monitored server
 * Set the username running *gmetad*
+
+Before we move on some background information. *gmond* sends and accepts data
+per default on port 8649. That is we have to configure the send and receive
+port in *gmond* and in *gmetad* we have to configure in the port over which
+port the data source can be connected to.
 
 #### Configure *gmond*
 Open up `/etc/ganglia/gmond.conf` and change the content as follows. The parts
@@ -357,7 +363,7 @@ is in *tcp_accept_channel*.
     }
 
 At this point we are done with *gmond* configuration. We can do additional
-configuration changes but to get monitoring running this is all we need.This 
+configuration changes but to get monitoring running this is all we need. This 
 we have to do on each server we want to collect metrics from. Now head over to 
 the *gmetad* configuration.
 
@@ -369,15 +375,33 @@ Find the *data_source* section and add a data source for our Monitoring cluster.
 
     data_source "Monitoring" localhost:8649
 
+The meaning of this line is that all servers that belong to the cluster
+*Monitoring* can be contacted over the port 8649. Or in other words all servers
+that belong to the *Monitoring* cluster have to have the port 8649 in their
+*udp_send_channel* and *tcp_receive_channel* directives.
+
 We can now check if everything works by restarting Ganglia with
 
     ganglia$ sudo service ganglia-monitor restart
     ganglia$ sudo service gmetad restart
 
 and head over to the Ganglia web interface at 
-[localhost:4568/ganglia](http://localhost:4568/ganglia). If everything works we
-want to manage these files with Puppet. We copy these files to the Ganglia
-Puppet module in the files directory on our Puppet server.
+[localhost:4568/ganglia](http://localhost:4568/ganglia). If it is not working
+properly you can check *gmond* and *gmetad* with telnet.
+
+To test *gmond* issue following command:
+
+    ganglia$ telnet localhost 8649
+
+This should respond with some XML data and then close the connection. *gmetad*
+listens on port 8651 and we can check whether it is running with
+
+    ganglia$ telnet localhost 8651
+
+This should also repsond with some XML data and then close the connection.
+
+If everything works we want to manage these files with Puppet. We copy these 
+files to the Ganglia Puppet module in the files directory on our Puppet server.
 
 #### Manage Ganglia Configuration Files with Puppet
 First we copy *gmond.conf* and *gmetad.conf* from our Ganglia server to our
