@@ -77,7 +77,12 @@ Vagrant file so it will look like this.
       config.vm.box = "ubuntu/trusty64"
       config.vm.hostname = "ganglia"
       config.vm.network "forwarded_port", guest: 80, host: 4568
+      config.vm.network "private_network", ip: "192.168.33.10"
     end 
+
+Make sure that the first three parts of the IP-address of the 
+*private-network* is not part of your network. We need this later on when we 
+configure Ganglia.
 
 Now run `vagrant up` to create the box.
 
@@ -304,7 +309,123 @@ Now we run Puppet on the Ganglia server to get the files in place.
     ganglia$ sudo puppet agent --test
 
 The Ganglia web interface should now be available at 
-[localhost:4568/ganglia](http://localhost:4568/ganglia). But currently we are
-not collecting any metrics. For that we have to configure *gmond.conf*.
+[localhost:4568/ganglia](http://localhost:4568/ganglia). 
 
+### Configure Ganglia
+But currently we are not collecting any metrics. For that we have to configure 
+*gmond* and *gmetad*. *gmond* lives on any server where we want to collect 
+data from. So this is also on the Ganglia server as we want to also monitor 
+our Ganglia server. *gmetad* is responsible to collect the data from the 
+monitored servers and provides the data to the Ganglia web interface.
+
+To configure *gmond* we have to make some changes to *gmond.conf* as follows.
+
+* Add the cluster name
+* Set the UDP send channel
+* Set the UDP receive channel
+
+The configuration of *gmetad* has to be done in *gmetad.conf* as outlined below.
+
+* Add a data source for each monitored server
+* Set the username running *gmetad*
+
+#### Configure *gmond*
+Open up `/etc/ganglia/gmond.conf` and change the content as follows. The parts
+to change are in different positions within the file, so a search would be 
+convenient.
+
+First we look *cluster {* and change the name to "Monitoring" as our Ganglia
+server belongs to the monitoring cluster.
+
+    cluster {
+     name = "Monitoring"
+    }
+
+Next look for *udp_send_channel {* and add the *private_network* address and the
+*forwarded_port* we have configured in the Vagrant file.
+
+    udp_send_channel {
+      host = 192.168.33.10
+      port = 8649
+    }
+
+We have to define a port over that *gmetad* can communicate with *gmond*. this
+is in *tcp_accept_channel*.
+
+    tcp_accept_channel {
+      port 8649
+    }
+
+At this point we are done with *gmond* configuration. We can do additional
+configuration changes but to get monitoring running this is all we need.This 
+we have to do on each server we want to collect metrics from. Now head over to 
+the *gmetad* configuration.
+
+#### Configure *gmetad*
+We now work in `/etc/ganglia/gmetad.conf` where we need to make following 
+changes.
+
+Find the *data_source* section and add a data source for our Monitoring cluster.
+
+    data_source "Monitoring" localhost:8649
+
+We can now check if everything works by restarting Ganglia with
+
+    ganglia$ sudo service ganglia-monitor restart
+    ganglia$ sudo service gmetad restart
+
+and head over to the Ganglia web interface at 
+[localhost:4568/ganglia](http://localhost:4568/ganglia). If everything works we
+want to manage these files with Puppet. We copy these files to the Ganglia
+Puppet module in the files directory on our Puppet server.
+
+#### Manage Ganglia Configuration Files with Puppet
+First we copy *gmond.conf* and *gmetad.conf* from our Ganglia server to our
+Puppet server.
+
+    ganglia$ scp /etc/ganglia/gmond.conf pierre@uranus:gmond.conf
+    ganglia$ scp /etc/ganglia/gmetad.conf pierre@uranus:gmetad.conf
+
+Next we copy theses files to `/etc/puppet/modules/ganglia/files`. If the files 
+directory doesn't exist yet we create it with
+
+    uranus$ mkdir /etc/puppet/modules/ganglia/files
+
+and copy *gmetad.conf* to `/etc/puppet/modules/ganglia/files/gmetad-server.conf`
+
+    uranus$ cp ~/gmetad.conf \
+                /etc/puppet/modules/ganglia/files/metad-server.conf
+
+and we copy *gmondd.conf* to `/etc/puppet/modules/ganglia/files/gmond.conf`
+
+    uranus$ cp ~/gmond.conf /etc/puppet/modules/ganglia/files/gmond.conf
+
+In the next step we extend our `ganglia::server::config` class to manage the
+configuration files. For that open 
+`/etc/puppet/modules/ganglia/manifests/server/config.pp` 
+and add following content.
+
+    File { "/etc/ganglia/gmond.conf":
+      source => "puppet:///ganglia/gmond.conf":
+      owner  => "ganglia",
+      group  => "ganglia",
+      notice => Class["Ganglia"],
+    }
+
+    File { "/etc/ganglia/gmetad-server.conf":
+      source => "puppet:///ganglia/gmetad.conf":
+      owner  => "ganglia",
+      group  => "ganglia",
+      notice => Class["Ganglia"],
+    }
+
+Now back on our Ganglia server we call Puppet to get the files in place.
+
+    ganglia$ sudo puppet agent --test
+
+When we go to [localhost:4568/ganglia](http://localhost:4568/ganglia) we should
+see the metrics collected from our Ganglia server within the *Monitoring*
+cluster.
+
+Next we want to collect metrics from our servers *uranus* and *mercury*.
 
