@@ -329,13 +329,13 @@ To configure *gmond* we have to make some changes to *gmond.conf* as follows.
 
 The configuration of *gmetad* has to be done in *gmetad.conf* as outlined below.
 
-* Add a data source for each monitored server
-* Set the username running *gmetad*
+* Add a data source for each cluster
 
-Before we move on some background information. *gmond* sends and accepts data
-per default on port 8649. That is we have to configure the send and receive
-port in *gmond* and in *gmetad* we have to configure in the port over which
-port the data source can be connected to.
+Before we move on some background information about the connection between
+*gmond* and *gmetad*. *gmond* sends and accepts data per default on port 8649. 
+That is we have to configure the send and receive port in *gmond*, which is 
+port 8649. In *gmetad* we have to configure over which port the data source 
+can be connected to, this is also 8649.
 
 #### Configure *gmond*
 Open up `/etc/ganglia/gmond.conf` and change the content as follows. The parts
