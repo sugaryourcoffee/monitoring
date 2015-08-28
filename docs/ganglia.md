@@ -271,7 +271,8 @@ The directory `/etc/ganglia-webfrontend` contains an Apache configuration file
 `/etc/ganglia-webfrontend/apache.conf` that we have to make available to Apache 
 so it gets loaded when Apache starts up. For that to happen we create a link in
 `/etc/apache2/conf-available/` to that file and run Apache's `a2enconf`. We 
-have to start `a2enconf` whenever we change that file. Let's add 
+want to run `a2enconf` only if the file is not in `/etc/apache2/conf-enabled/`.
+This is which is checked with the unless parameter. Let's add 
 `/etc/puppet/modules/ganglia/manifests/server/config.pp` with following content.
 
     class ganglia::server::config {
@@ -284,6 +285,7 @@ have to start `a2enconf` whenever we change that file. Let's add
         command => "/usr/sbin/a2enconf -q ganglia",
         require => File["/etc/apache2/conf-available/ganglia.conf"],
         notify  => Class["apache::service"],
+        unless  => "/usr/bin/test -f /etc/apache2/conf-enabled/ganglia.conf",
       }
     }
 
@@ -430,18 +432,39 @@ configuration files. For that open
 and add following content.
 
     File { "/etc/ganglia/gmond.conf":
-      source => "puppet:///ganglia/gmond.conf":
-      owner  => "ganglia",
-      group  => "ganglia",
-      notice => Class["Ganglia"],
+      source  => "puppet:///modules/ganglia/gmond.conf":
+      owner   => "root",
+      group   => "root",
+      mode    => 644,
+      require => Class["ganglia::server::install"],
+      notify  => Class["ganglia::server::service"],
     }
 
-    File { "/etc/ganglia/gmetad-server.conf":
-      source => "puppet:///ganglia/gmetad.conf":
-      owner  => "ganglia",
-      group  => "ganglia",
-      notice => Class["Ganglia"],
+    File { "/etc/ganglia/gmetad.conf":
+      source  => "puppet:///modules/ganglia/gmetad.conf":
+      owner   => "root",
+      group   => "root",
+      mode    => 644,
+      require => Class["ganglia::server::install"],
+      notify  => Class["ganglia::server::service"],
     }
+
+The *service* class doesn't exist yet so we have to create it and call it in
+our *server.pp* file. Open a new file `etc/puppet/ganglia/manifests/server/service.pp` and add the service class definition.
+
+    class ganglia::server::service {
+      service { "ganglia-monitor":
+        hasrestart => true,
+      }
+
+      service { "gmetad":
+        hasrestart => true,
+      }
+    }
+
+Now open up `/etc/puppet/modules/ganglia/manifests/server.pp` and add
+
+    class { '::ganglia::server::service': } ->
 
 Now back on our Ganglia server we call Puppet to get the files in place.
 
