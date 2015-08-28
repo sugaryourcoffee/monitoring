@@ -505,8 +505,14 @@ Infrastructure | earth   | NAS server                                    |
 
 Next we copy `/etc/puppet/ganglia/files/gmond.conf` in the same directory to
 `gmond-monitoring`, `gmond-production`, `gmond-staging` and 
-`gmond-infrastructure`. Change in each file the name of the *cluster* directive
-to the cluster name indicated by the filename.
+`gmond-infrastructure`.     
+
+    uranus$ cd /etc/puppet/modules/ganglia/files
+    uranus$ for file in monitoring production staging infrastructure; do \
+    > cp gmond.conf "gmond-$file.conf"; done
+
+Change in each file the name of the *cluster* directive to the cluster name 
+indicated by the filename.
 
     uranus$ vi /etc/puppet/modules/ganglia/files/gmond-monitoring.conf
     cluster {
@@ -537,6 +543,8 @@ The next steps are for each cluster we create following files.
   *CLUSTER* has to be replaced with *monitoring*, *production*, *staging* and
   *infrastructure*.
 * For each server we have to add a node to `/etc/puppet/manifests/site.pp` 
+* On the Ganglia server we have to provide the information about new clients in
+  *gmetad.conf*.
 
 First we create the cluster files in `/etc/puppet/modules/ganglia/manifests/`
 
@@ -544,7 +552,7 @@ File `/etc/puppet/modules/ganglia/manifests/monitoring.pp`
 
     class ganglia::monitoring {
       class { '::ganglia::client::install':    } ->
-      class { '::ganglia::client::config-monitoring': } ->
+      class { '::ganglia::client::config_monitoring': } ->
       class { '::ganglia::client::service':    } ->
       Class['ganlia::monitoring']
     }
@@ -553,7 +561,7 @@ File `/etc/puppet/modules/ganglia/manifests/production.pp`
 
     class ganglia::production {
       class { '::ganglia::client::install':    } ->
-      class { '::ganglia::client::config-production': } ->
+      class { '::ganglia::client::config_production': } ->
       class { '::ganglia::client::service':    } ->
       Class['ganlia::production']
     }
@@ -562,7 +570,7 @@ File `/etc/puppet/modules/ganglia/manifests/staging.pp`
 
     class ganglia::staging {
       class { '::ganglia::client::install':    } ->
-      class { '::ganglia::client::config-staging': } ->
+      class { '::ganglia::client::config_staging': } ->
       class { '::ganglia::client::service':    } ->
       Class['ganlia::staging']
     }
@@ -571,7 +579,7 @@ File `/etc/puppet/modules/ganglia/manifests/infrastructure.pp`
 
     class ganglia::infrastructure {
       class { '::ganglia::client::install':    } ->
-      class { '::ganglia::client::config-infrastructure': } ->
+      class { '::ganglia::client::config_infrastructure': } ->
       class { '::ganglia::client::service':    } ->
       Class['ganlia::infrastructure']
     }
@@ -666,7 +674,7 @@ And finally we add the server nodes to `/etc/puppet/manifests/site.pp`
       include "ganglia::production"
     }
 
-    node 'earth.firtz.box' {
+    node 'earth.fritz.box' {
       include "ganglia::infrastructure"
     }
 
@@ -676,9 +684,13 @@ installed and configured Puppet client. How to do that can be looked up in
 and in [Configure Puppet Client](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#prepare-the-client)
 
     mercury$ sudo puppet agent --test
-    uranus$ sudo puppet agent --test
     earth$ sudo puppet agent --test
     nagios$ sudo puppet agent --test
+
+As the *uranus* server happens to be also our Puppet server we call Puppet with
+`puppet apply` locally.
+
+    uranus$ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
 
 If we go to [localhost:4568/ganglia](http://localhost:4568/ganglia) we should
 see 4 clusters continuousy showing metrics.
