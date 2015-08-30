@@ -831,16 +831,9 @@ located.
 
 File        | Path                     | Description
 ----------- | ------------------------ | -----------
-gmetad.conf | /etc/ganglia/            | Collecting data from servers by talking
-            |                          | to gmond. Has to be installed on the
-            |                          | Ganglia server
-gmond.conf  | /etc/ganglia/            | Collecting metrics from servers and 
-            |                          | sending them to gmetad. Has to be 
-            |                          | installed on the Ganlia server and
-            |                          | clients
-apache.conf | /etc/ganglia-webfrontend | Apache configuration file for Ganglia's
-            |                          | web interface. Has to be linked to
-            |                          | /etc/apache2/conf-enabled/
+gmetad.conf | /etc/ganglia/            | Collecting data from servers by talking to gmond. Has to be installed on the Ganglia server
+gmond.conf  | /etc/ganglia/            | Collecting metrics from servers and sending them to gmetad. Has to be installed on the Ganlia server and clients
+apache.conf | /etc/ganglia-webfrontend | Apache configuration file for Ganglia's web interface. Has to be linked to /etc/apache2/conf-enabled/
 
 Resources
 =========
