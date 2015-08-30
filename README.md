@@ -8,7 +8,8 @@ Used applications for monitoring are
 * Nagios
 * Ganglia
 
-How to setup each can be found in [Monitoring](docs/monitoring.md)
+How to setup Nagios can be found in [Nagios](docs/nagios.md) and how to setup
+Ganglia can be found in [Ganglia](docs/ganglia.md)
 
 License
 -------
