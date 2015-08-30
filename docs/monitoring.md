@@ -883,6 +883,11 @@ If there are any syntax errors you will be put back to nano.
 Note: To find the path to _passenger-status_ you can 
 call `rvmsudo which passenger-status`
 
+Note: If it is not working with the user nagios you can check whether a 
+different user is invoking the NRPE check commands. Every access to the machine
+is logged in `/var/log/auth.log`. With `$ sudo tail -f /var/log/auth.log` you
+can monitor who is accessing which application on your server.
+
 Note: If you mess up your sudoers file you can recover with `pkexec visudo`
 
 To get this file managed with Puppet copy it to 
