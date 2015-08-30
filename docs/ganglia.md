@@ -824,3 +824,31 @@ to `/etc/puppet/modules/ganglia/files/gmetad.conf`.
 If we go to [localhost:4568/ganglia](http://localhost:4568/ganglia) we should
 see 4 clusters continuousy showing metrics.
 
+Configuration Files
+===================
+The following table shows the different configuration files and where these are
+located.
+
+File        | Path                     | Description
+----------- | ------------------------ | -----------
+gmetad.conf | /etc/ganglia/            | Collecting data from servers by talking
+            |                          | to gmond. Has to be installed on the
+            |                          | Ganglia server
+gmond.conf  | /etc/ganglia/            | Collecting metrics from servers and 
+            |                          | sending them to gmetad. Has to be 
+            |                          | installed on the Ganlia server and
+            |                          | clients
+apache.conf | /etc/ganglia-webfrontend | Apache configuration file for Ganglia's
+            |                          | web interface. Has to be linked to
+            |                          | /etc/apache2/conf-enabled/
+
+Resources
+=========
+To get more detailed information on Ganglia you could have a look at these
+books.
+
+* [Deploying Rails](https://pragprog.com/book/cbdepra/deploying-rails) 
+  from Anthony Burns and Tom Copeland. This book is unfortunately out of print.
+* [Ganglia](http://shop.oreilly.com/product/0636920025573.do) from Matt Massie
+  et al
+
