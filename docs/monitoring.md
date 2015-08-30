@@ -19,7 +19,8 @@ Machine    | Task
 ---------- | ------------------------------------------------------------
 saltspring | development hosting the nagios server run in Virtualbox
 nagios     | Nagios server in Virtualbox hosted by saltspring
-uranus     | Puppet server and server hosting the apptrack and secondhand staging Rails applications
+uranus     | Puppet server and server hosting the apptrack and secondhand 
+           | staging Rails applications
 mercury    | Server hosting secondhand Rails application
 
 Used Software
@@ -97,14 +98,15 @@ Vagrantfile as follows
 
     config.vm.hostname = "nagios"
     config.vm.network  = "forwarded_port", guest: 80, host: 4567
-    config.vm.network  = "private_network", ip: "192.168.100.100"
+    config.vm.network  = "public_network", ip: "192.168.178.111"
     config.vm.provider "virtualbox" do |vb|
       vb.memory = 2048
       vb.cpus   = 2
     end
 
-Note: The IP address 192.168.100 must not match with your local Network.
-vb.memory and vb.cpus you can change to what is possible with your machine.
+Note: The IP address 192.168.178.111 must not match with an already taken by
+a host in your network. *vb.memory* and *vb.cpus* you can change to what is 
+possible with your machine.
 
 ## Create and start the box
 `vagrant up` is the command to create and start up the box. The first time
@@ -723,11 +725,16 @@ Now that we have NRPE installed we will find a configuration file `nrpe.cfg`in
 In that file we can tell NRPE which hosts are allowed to access the services.
 Make following change to `nrpe.cfg`
 
-    allowed_hosts=192.168.178.81
+    allowed_hosts=192.168.178.111
 
-This is the IP address of our host machine. Even though we are connecting from
-the nagios server, that is the Vagrantbox, the hosts IP address is forwarded. In
-order to make changes available we have to add a _config_ class to 
+This is the IP address we set up in the *Vagrantfile* as a public network 
+address for our Vagrantbox, that is the Nagios server. 
+
+In case we don't provide a public network address for our Nagios server we have
+to add the IP address of our host machine. Even though we are connecting from 
+the nagios server, that is the Vagrantbox, the hosts IP address is forwarded. 
+
+In order to make changes available we have to add a _config_ class to 
 `/etc/puppet/modules/nagios/manifests/client/config.pp
 
     class nagios::client::config {
@@ -1011,8 +1018,14 @@ and on *uranus* we run
 When we look at the Nagios web interface we should see the new service. We can
 also check on our Nagios server whether we can invoke our new plugin with
 
-    nagios$ /usr/lib/nagios/plugins/check_nrpe -H uranus -c check_passenger_memory
+    nagios$ /usr/lib/nagios/plugins/check_nrpe -H uranus \
+    > -c check_passenger_memory
     Passenger apptrack memory OK - 72M used
+
+If the response is `Passenger apptrack memory OK - used`, that is the value 
+is missing (in our example `72M`), then you have to open the apptrack site in 
+your browser first.  After a restart of the server the application is not 
+started until it is accessed.
 
 Note: If you get an error saying 
 _sudo: no tty present and no askpass programm specified_ then go back to 
@@ -1169,7 +1182,8 @@ it gets managed by Puppet.
                     /etc/puppet/modules/nagios/files/nrpe.cfg
 
 ### Add a Command Definition
-Next we have to add a command definition to `/etc/puppet/modules/nagios/files/conf.d/commands.cfg`
+Next we have to add a command definition to 
+`/etc/puppet/modules/nagios/files/conf.d/commands.cfg`
 
     define command {
       command_name      check_passenger_memory
