@@ -116,7 +116,7 @@ Puppet server is already running, so we can just head into creating a Puppet
 module for Ganglia. First we add a node to `/etc/puppet/manifests/site.pp` on 
 our Puppet server *uranus*.
 
-    node 'ganglia.firtz.box' {
+    node 'ganglia.fritz.box' {
     } 
 
 ### Prepare the Puppet Client Ganglia
@@ -216,7 +216,7 @@ Ganglia is collecting data from servers and can display them in a Ganglia web
 interface. On the Ganglia server we need to install *ganglia-webfrontend* and 
 *gmetad*. *ganglia-webfrontend* will also install *gmetad*. *gmetad* collects 
 the data from the server and *ganglia-webfrontend* displays the data. 
-*ganlia-monitor*, respectively the containing application *gmond* is collecting
+*ganglia-monitor*, respectively the containing application *gmond* is collecting
 data on the servers and provides them to *gmetad*. That is every server we
 want to collect data from we need to install *ganglia-monitor* on. As we want 
 to also monitor our Ganglia server we have to install *ganglia-monitor* on the 
@@ -273,7 +273,7 @@ The directory `/etc/ganglia-webfrontend` contains an Apache configuration file
 so it gets loaded when Apache starts up. For that to happen we create a link in
 `/etc/apache2/conf-available/` to that file and run Apache's `a2enconf`. We 
 want to run `a2enconf` only if the file is not in `/etc/apache2/conf-enabled/`.
-This is which is checked with the unless parameter. Let's add 
+This is checked with the `unless` parameter. Let's add 
 `/etc/puppet/modules/ganglia/manifests/server/config.pp` with following content.
 
     class ganglia::server::config {
@@ -327,35 +327,49 @@ To configure *gmond* we have to make some changes to *gmond.conf* as follows.
 * Add the cluster name
 * Set the UDP send channel
 * Set the UDP receive channel
+* Set the TCP accept channel
 
 The configuration of *gmetad* has to be done in *gmetad.conf* as outlined below.
 
 * Add a data source for each cluster
 
 Before we move on some background information about the connection between
-*gmond* and *gmetad*. *gmond* sends and accepts data per default on port 8649. 
-That is we have to configure the send and receive port in *gmond*, which is 
-port 8649. In *gmetad* we have to configure over which port the data source 
-can be connected to, this is also 8649.
+*gmond* and *gmetad*. *gmond* sends and accepts, over the UDP send and receive
+channel, data per default on port 8649. That is we have to configure the send 
+and receive port in *gmond*, which is port 8649. In *gmetad* we have to 
+configure over which port the data source can be connected to, this is also 
+8649. The TCP accept channel is where *gmond* reports the cluster state to 
+*gmetad*.
 
 #### Configure *gmond*
 Open up `/etc/ganglia/gmond.conf` and change the content as follows. The parts
 to change are in different positions within the file, so a search would be 
 convenient.
 
-First we look *cluster {* and change the name to "Monitoring" as our Ganglia
+First we look up *cluster {* and change the name to "Monitoring" as our Ganglia
 server belongs to the monitoring cluster.
 
     cluster {
      name = "Monitoring"
     }
 
-Next look for *udp_send_channel {* and add the *private_network* address and the
-*forwarded_port* we have configured in the Vagrant file.
+Next look for *udp_send_channel {* and add the following content which might be
+already in place. We are using *multicast* for the communication within the
+cluster.
 
     udp_send_channel {
-      host = 192.168.33.10
+      mcast_join = 239.2.11.71
       port = 8649
+      ttl = 1
+    }
+
+We also have to configure how to receive data from the cluster this server is
+in. Search for *udp_recv_channel {* and add this content.
+
+    udp_recv_channel {
+      mcast_join = 239.2.11.71
+      port = 8649
+      bind = 239.2.11.71
     }
 
 We have to define a port over that *gmetad* can communicate with *gmond*. this
@@ -364,6 +378,9 @@ is in *tcp_accept_channel*.
     tcp_accept_channel {
       port 8649
     }
+
+Note: All servers that belong to the same cluster have to use the same 
+configuration as show above. That is the multicast IP address and the port.
 
 At this point we are done with *gmond* configuration. We can do additional
 configuration changes but to get monitoring running this is all we need. This 
@@ -381,7 +398,7 @@ Find the *data_source* section and add a data source for our Monitoring cluster.
 The meaning of this line is that all servers that belong to the cluster
 *Monitoring* can be contacted over the port 8649. Or in other words all servers
 that belong to the *Monitoring* cluster have to have the port 8649 in their
-*udp_send_channel* and *tcp_receive_channel* directives.
+*udp_send_channel*, *udp_recv_channel* and *tcp_accept_channel* directives.
 
 We can now check if everything works by restarting Ganglia with
 
@@ -402,6 +419,29 @@ listens on port 8651 and we can check whether it is running with
     ganglia$ telnet localhost 8651
 
 This should also repsond with some XML data and then close the connection.
+
+You can also run *gmond* and *gmetad* in debug mode like so
+
+    ganglia$ gmond -d 5 -c /etc/ganglia/gmond.conf
+
+or
+
+    ganglia$ gmetad -d 5 -c /etc/ganglia/gmond.conf
+
+where `-d 5` means *run gmond in debug level 5* and `-c` is followed by the 
+configuration file.
+
+To check whether the multicast address `239.2.11.71` is considered as a group
+issue
+
+    ganglia$ netstat -g
+    Interface      RefCnt Group
+    -------------- ------ -----------
+    eth0           1      239.2.11.71
+
+If not check whether multicast is enabled on your network card by issuing
+`ifconfig` and see whether your interface shows something like 
+`UP BROADCAST RUNNING MULTICAST MTU:1500 Metric:1`
 
 If everything works we want to manage these files with Puppet. We copy these 
 files to the Ganglia Puppet module in the files directory on our Puppet server.
@@ -494,14 +534,19 @@ file where *CLUSTER* has to be replaced by the cluster name. At the moment we
 have the cluster *Monitoring*. An overview of the clusters we want to maintain 
 is show in the following table.
 
-Cluster        | Server  | Description                                   |
--------------- | ------- | --------------------------------------------- |
-Monitoring     | ganglia | Hosting the Ganglia server                    |
-Monitoring     | nagios  | Hosting the Nagios server                     |
-Production     | mercury | Hosting the Secondhand Production application |
-Staging        | uranus  | Hosting Secondhand Staging and non critical   |
-               |         | applications                                  | 
-Infrastructure | earth   | NAS server                                    |
+Cluster        | Server  | Port | Description                                  
+-------------- | ------- | -----| -------------------------------------------- 
+Monitoring     | ganglia | 8649 | Hosting the Ganglia server                   
+Monitoring     | nagios  | 8649 | Hosting the Nagios server                    
+Staging        | uranus  | 8653 | Hosting Secondhand Staging and non critical
+               |         |      | applications
+Production     | mercury | 8654 | Hosting the Secondhand Production application
+Infrastructure | earth   | 8655 | NAS server  
+
+Note that each cluster has to have its own unique port assigned. If you have the
+same port to two different clusters assigned the cluster will not be shown 
+correctly. Also don't use ports 8651 and 8652 as they are ports *gmetad* uses
+for other communication.
 
 Next we copy `/etc/puppet/ganglia/files/gmond.conf` in the same directory to
 `gmond-monitoring`, `gmond-production`, `gmond-staging` and 
@@ -512,11 +557,24 @@ Next we copy `/etc/puppet/ganglia/files/gmond.conf` in the same directory to
     > cp gmond.conf "gmond-$file.conf"; done
 
 Change in each file the name of the *cluster* directive to the cluster name 
-indicated by the filename.
+indicated by the filename and the *udp_send_channel*, *udp_recv_channel* and
+the *tcp_accept_channel* with the port we have chosen in the table above.
 
     uranus$ vi /etc/puppet/modules/ganglia/files/gmond-monitoring.conf
     cluster {
       name = "Monitoring"
+    }
+
+    udp_send_channel {
+      mcast_join = 239.2.11.71
+      port = 8649
+      ttl = 1
+    }
+
+    udp_recv_channel {
+      mcast_join = 239.2.11.71
+      port = 8649
+      bind = 239.2.11.71
     }
 
     uranus$ vi /etc/puppet/modules/ganglia/files/gmond-production.conf
@@ -524,15 +582,77 @@ indicated by the filename.
       name = "Production"
     }
 
+    udp_send_channel {
+      mcast_join = 239.2.11.71
+      port = 8654
+      ttl = 1
+    }
+
+    udp_recv_channel {
+      mcast_join = 239.2.11.71
+      port = 8654
+      bind = 239.2.11.71
+    }
+
     uranus$ vi /etc/puppet/modules/ganglia/files/gmond-staging.conf
     cluster {
       name = "Staging"
+    }
+
+    udp_send_channel {
+      mcast_join = 239.2.11.71
+      port = 8653
+      ttl = 1
+    }
+
+    udp_recv_channel {
+      mcast_join = 239.2.11.71
+      port = 8653
+      bind = 239.2.11.71
     }
 
     uranus$ vi /etc/puppet/modules/ganglia/files/gmond-infrastructure.conf
     cluster {
       name = "Infrastructure"
     }
+
+    udp_send_channel {
+      mcast_join = 239.2.11.71
+      port = 8654
+      ttl = 1
+    }
+
+    udp_recv_channel {
+      mcast_join = 239.2.11.71
+      port = 8654
+      bind = 239.2.11.71
+    }
+
+As our Ganglia server is running as a virtual machine on a host computer we 
+cannot access the Ganglia server directly. To make the Ganglia server publicly 
+available we have to configure the Ganglia server with a public network.
+
+Add following directive to the Vagrantfile.
+
+    vm.config.network "public_network"
+
+You can also specify an IP address with
+
+    vm.config.network "public_network", ip: 129.168.178.120
+
+But you have to make sure that the IP address is not taken by another machine.
+
+To take effect we have to reload the Vagrantfile with
+
+    saltspring$ vagrant reload
+
+You will be prompted which network to bridge, e.g.
+
+    1) wlan0
+    2) eth2
+
+Enter the number (1 or 2) depending on how your your machine is connected to
+the network.
 
 The next steps are for each cluster we create following files.
 
@@ -554,7 +674,7 @@ File `/etc/puppet/modules/ganglia/manifests/monitoring.pp`
       class { '::ganglia::client::install':    } ->
       class { '::ganglia::client::config_monitoring': } ->
       class { '::ganglia::client::service':    } ->
-      Class['ganlia::monitoring']
+      Class['ganglia::monitoring']
     }
 
 File `/etc/puppet/modules/ganglia/manifests/production.pp`
@@ -563,7 +683,7 @@ File `/etc/puppet/modules/ganglia/manifests/production.pp`
       class { '::ganglia::client::install':    } ->
       class { '::ganglia::client::config_production': } ->
       class { '::ganglia::client::service':    } ->
-      Class['ganlia::production']
+      Class['ganglia::production']
     }
 
 File `/etc/puppet/modules/ganglia/manifests/staging.pp`
@@ -572,7 +692,7 @@ File `/etc/puppet/modules/ganglia/manifests/staging.pp`
       class { '::ganglia::client::install':    } ->
       class { '::ganglia::client::config_staging': } ->
       class { '::ganglia::client::service':    } ->
-      Class['ganlia::staging']
+      Class['ganglia::staging']
     }
 
 File `/etc/puppet/modules/ganglia/manifests/infrastructure.pp`
@@ -581,7 +701,7 @@ File `/etc/puppet/modules/ganglia/manifests/infrastructure.pp`
       class { '::ganglia::client::install':    } ->
       class { '::ganglia::client::config_infrastructure': } ->
       class { '::ganglia::client::service':    } ->
-      Class['ganlia::infrastructure']
+      Class['ganglia::infrastructure']
     }
 
 Now we create the files *install.pp*, *service.pp*  and *config-CLUSTER.pp* in 
@@ -691,6 +811,15 @@ As the *uranus* server happens to be also our Puppet server we call Puppet with
 `puppet apply` locally.
 
     uranus$ sudo puppet apply --verbose /etc/puppet/manifests/site.pp
+
+Now we let the servers collect data and in the meanwhile we have to inform our
+Ganglia server about the new clusters. We add the new clusters as data resources
+to `/etc/puppet/modules/ganglia/files/gmetad.conf`.
+
+    data_source monitoring localhost:8649 nagios.fritz.box:8649
+    data_source production mercury.fritz.box:8652
+    data_source staging uranus.fritz.box:8653
+    data_source infrastructure earth.fritz.box:8654
 
 If we go to [localhost:4568/ganglia](http://localhost:4568/ganglia) we should
 see 4 clusters continuousy showing metrics.
