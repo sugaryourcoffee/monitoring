@@ -60,7 +60,7 @@ Create a VirtualBox for Ganglia
 ===============================
 Hints on how to install VirtualBox and Vagrant can be found at
 [Install VirtualBox](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#install-virtualbox) 
-and [Installe Vagrant](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#install-vagrant) 
+and [Install Vagrant](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#install-vagrant) 
 respectively.
 
 To create a box for Ganglia we change into the Ganglia directory we have just
@@ -79,11 +79,11 @@ Vagrant file so it will look like this.
       config.vm.hostname = "ganglia"
       config.vm.network "forwarded_port", guest: 80, host: 4568
       config.vm.network "private_network", ip: "192.168.33.10"
+      config.vm.network "public_network", ip: "192.168.178.120"
     end 
 
-Make sure that the first three parts of the IP-address of the 
-*private-network* is not part of your network. We need this later on when we 
-configure Ganglia.
+Make sure that the of the IP-address of the *public-network* is not part of you
+network. We need this later on when we configure Ganglia.
 
 Now run `vagrant up` to create the box.
 
