@@ -180,7 +180,7 @@ port 8140 is open.
 
 We can open the port with `iptables`
 
-    uranus$ sudo iptables -A INPUT -p tcp -m state --state NeW -s 192.168.178.0/24 \
+    uranus$ sudo iptables -A INPUT -p tcp -m state --state NEW -s 192.168.178.0/24 \
     --dport 8140 -j ACCEPT
 
 To see whether the rule is effective we can use `sudo iptables -L`.
