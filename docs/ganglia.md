@@ -1009,13 +1009,14 @@ In this case check whether you have
 
 Resources
 =========
-To get more detailed information on Ganglia you could have a look at these
-books.
+To get more detailed information on Ganglia and topics we have covered in this
+document you could have a look at these books.
 
 * [Deploying Rails](https://pragprog.com/book/cbdepra/deploying-rails) 
   from Anthony Burns and Tom Copeland. This book is unfortunately out of print.
 * [Ganglia](http://shop.oreilly.com/product/0636920025573.do) from Matt Massie
   et al
+* [Linux Firewalls](https://www.nostarch.com/firewalls.htm) from Michael Rash
 
 There is an excellent post about troubleshooting Ganglia at
 
