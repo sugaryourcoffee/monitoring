@@ -835,6 +835,178 @@ gmetad.conf | /etc/ganglia/            | Collecting data from servers by talking
 gmond.conf  | /etc/ganglia/            | Collecting metrics from servers and sending them to gmetad. Has to be installed on the Ganlia server and clients
 apache.conf | /etc/ganglia-webfrontend | Apache configuration file for Ganglia's web interface. Has to be linked to /etc/apache2/conf-enabled/
 
+Trouble Shooting
+================
+Even though setting up Ganglia is rather easy, there might occur some problems
+you come across. 
+
+* Cluster doesn't show all nodes in web interface
+* Web interface is showing page with *fsckopen error*
+* Node (*gmond*) is not sending data
+* Node (*gmond*) is sending data but it is not receveived by *gmetad*
+
+There several tools that help to analyze the problem.
+
+* `ifconfig` to check which interfaces are available
+* `netstat -g` to see whether the node is in a multicast group
+* `netcat` or `telnet` to check whether we can send data over the respective
+  port, e.g. 8649.
+* `lsof` to check whether the connections between nodes is established
+* `tcpdump` to check that data is actually send
+* `gstat` to see whether the metrics of a cluster are collected at a node that
+  represents the node
+* `/var/log/auth.log` to see which user is accessing which appliations
+* `gmond` and `gmetad` running in debug mode to check for errors
+
+Cluster doens't show all nodes in the web interface
+---------------------------------------------------
+Event though data gets send by `gmond` it doesn't arrive at the Ganglia server.
+If you have more than one interface you might sending from the wrong interface.
+If you are using multicast then you can check whether your node is in a 
+multicast group with
+
+    node$ netstat -g
+
+To check whether the connection between nodes is established call
+
+    node$ sudo lsof -i :8649
+    COMMAND   PID    USER   FD   TYPE  DEVICE SIZE/OFF NODE NAME
+    gmond   32563 ganglia    5u  IPv4 7887179      0t0  UDP 239.2.11.71:8653 
+    gmond   32563 ganglia    6u  IPv4 7887181      0t0  TCP *:8653 (LISTEN)
+    gmond   32563 ganglia    7u  IPv4 7887183      0t0  UDP uranus.fritz.box:507
+    87->239.2.11.71:8653
+
+As we can see uranus is sending to the multicast address.
+
+Next check the interfaces with
+
+    node$ ifconfig
+    eth0      Link encap:Ethernet  HWaddr 08:00:27:3a:0b:5b
+              inet addr:10.0.2.15 Bcast:10.0.2.255 Mask:255.255.255.0
+              inet6 addr: fe80::a00:27ff:fe3a:b5b/64 Scope:Link
+              UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+              RX packets:4423 errors:0 dropped:0 overruns:0 frame:0
+              TX packets:5520 errors:0 dropped:0 overruns:0 carrier:0
+              collisions:0 txqueuelen:1000
+              RX bytes:608674 (608.6 KB)  TX bytes:7965736 (7.9 MB)
+
+    eth1      Link encap:Ethernet  HWaddr 08:00:27:f7:02:57
+              inet addr:192.168.178.111 Bcast:192.168.178.255 Mask:255.255.255.0
+              UP BROADCAST RUNNING MULTICAST  MTU:1500  Metric:1
+              RX packets:3733 errors:0 dropped:0 overruns:0 frame:0
+              TX packets:3747 errors:0 dropped:0 overruns:0 carrier:0
+              collisions:0 txqueuelen:1000
+              RX bytes:807186 (807.1 KB)  TX bytes:822338 (822.3 KB)
+
+We can see we have two interfaces that are poth capable of sending multicast. We
+have to send the data over the IP address that is configured in `gmetad.conf`.
+In this case the only address that is visible to other hosts is 
+*192.168.178.111* which is *eth1*. If `gmond` sends over *eth0* we have to 
+configure `mcast_if = eth1` in the nodes `gmond.conf` configuration file. To 
+check which interface is sending the data we issue
+
+    node$ sudo tcpdump -i eth0 udp port 8649
+    tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+    listening on eth0, link-type EN10MB (Ethernet), capture size 65535 bytes
+
+If you don't see any data then check the interface *eth1*
+
+    node$ sudo tcpdump -i eth1 udp port 8649
+    tcpdump: verbose output suppressed, use -v or -vv for full protocol decode
+    listening on eth1, link-type EN10MB (Ethernet), capture size 65535 bytes
+    08:28:01.948653 IP nagios.43492 > 239.2.11.71.8649: UDP, length 52
+    08:28:01.949091 IP nagios.43492 > 239.2.11.71.8649: UDP, length 52
+    08:28:01.999188 IP nagios.43492 > 239.2.11.71.8649: UDP, length 44
+    08:28:01.999639 IP nagios.43492 > 239.2.11.71.8649: UDP, length 48
+    08:28:01.999971 IP nagios.43492 > 239.2.11.71.8649: UDP, length 48
+    08:28:03.186822 IP 192.168.178.120.50833 > 239.2.11.71.8649: UDP, length 48
+    08:28:03.187330 IP 192.168.178.120.50833 > 239.2.11.71.8649: UDP, length 44
+    08:28:03.187345 IP 192.168.178.120.50833 > 239.2.11.71.8649: UDP, length 44
+    08:28:03.187359 IP 192.168.178.120.50833 > 239.2.11.71.8649: UDP, length 44
+    08:28:03.325125 IP 192.168.178.120.50833 > 239.2.11.71.8649: UDP, length 48
+    08:28:03.332437 IP nagios.43492 > 239.2.11.71.8649: UDP, length 48
+
+As we can see data is send over *eth1*. In this case we have to add the IP 
+*192.168.178.111* to the `data_source` definition in the `gmetad.conf`
+configuration file.
+
+
+Web interface is showing page with *fsckopen error*
+---------------------------------------------------
+This typically means that `gmetad` is not running. Try
+
+    node$ sudo service gmetad restart
+
+If it still doesn't start up run `gmetad` in debug mode
+
+    node$ sudo gmetad -d 10 -c /etc/ganglia/gmetad.conf
+
+And see if it exits with an error. You can also look into `/var/lgo/syslog` if
+there are error messages in regard to `gmetad`.
+
+Node (*gmond*) is not sending data
+----------------------------------
+A problem might be that the wrong interface is used (see [
+Cluster doens't show all nodes in the web interface]()). You can also check
+whether you are able to send data over the port *8649*. This can be done with
+`netcat`.
+
+If node1 is configured with `udp_recv_channel` so it will receive data start
+`netcat -lup 8649` this will listen (-l) on UDP connection (-u) on port (-p)
+8649.
+
+    node1$ nc -ulp 8649
+    
+Next on node2 start netcat with an UDP connection to node1 (-u node1) on port
+8649.
+
+    node2$ nc -u node1 8649
+    message from node 2
+
+On node1 you should see the message
+
+    node1$ nc -ulp 8649
+    message from node 2
+
+If you don't receive the message check
+  
+* if node1 has a `udp_recv_channel` configured
+* that node1 has set `deaf = off`
+* if node2 has a `udp_send_channel` configured
+* that node2 is set `mute = off`
+* that you have set the correct `mcast_if` if there are multiple
+  interfaces configured
+* that the ports are set correctly
+
+If all has been checked you may check whether port 8649 is open with `netstat`
+
+    node$ sudo netstat -atun | grep 8549
+    tcp        0      0 0.0.0.0:8649            0.0.0.0:*            LISTEN
+    udp        0      0 239.2.11.71:8649        0.0.0.0:*
+    udp        0      0 192.168.178.111:43492   239.2.11.71:8649     ESTABLISHED
+
+This check for all sockets currently in use (-a) that are TCP (-t) and UDP (-u)
+and show host IP addresses instead of names (-n).
+
+If you don't see any output you may open the port 8649 with `iptables`.
+
+    node$ sudo iptables -A INPUT -p tcp -m state --state NEW \
+    -s 192.168.178.0/24 --dport 8649 -j ACCEPT
+
+    node$ sudo iptables -A INPUT -p udp -m state --state NEW \
+    -s 192.168.178.0/24 --dport 8649 -j ACCEPT
+
+To see if the rules are set you can issue `sudo iptables -L`.
+
+Node (*gmond*) is sending data but it is not receveived by *gmetad*
+-------------------------------------------------------------------
+In this case check whether you have
+
+* `gmetad` is running
+* configured a `data_source` in `gemtad.conf` with the node and the correct IP 
+  address and port
+* `gmond` is sending on an interface with a public IP address
+
 Resources
 =========
 To get more detailed information on Ganglia you could have a look at these
@@ -844,4 +1016,8 @@ books.
   from Anthony Burns and Tom Copeland. This book is unfortunately out of print.
 * [Ganglia](http://shop.oreilly.com/product/0636920025573.do) from Matt Massie
   et al
+
+There is an excellent post about troubleshooting Ganglia at
+
+* [hakunamapdata.com](http://hakunamapdata.com/ganglia-configuration-for-a-small-hadoop-cluster-and-some-troubleshooting/) from Adam Kawa
 
