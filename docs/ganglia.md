@@ -121,14 +121,14 @@ our Puppet server *uranus*.
 
 ### Prepare the Puppet Client Ganglia
 In order to provision our Ganglia server we have to request a certificate from
-our Puppet server. To do this we assign the IP address of our Puppet server
-*uranus* to the name *puppet* in `/etc/hosts`. Add following line into
-`/etc/hosts` on your Ganglia server
+our Puppet server. In order to not always have to provide the Puppet server name
+we assign the IP address of our Puppet server *uranus* to the name *puppet* in 
+`/etc/hosts`. Add following line into `/etc/hosts` on your Ganglia server
 
     ganglia$ sudo vi /etc/hosts
     192.168.178.66 puppet
 
-No request the certificate from your Puppet server with
+Now request the certificate from your Puppet server with
 
     ganglia$ sudo puppet agent --test
     vagrant@ganglia:~$ sudo puppet agent --test
@@ -148,7 +148,7 @@ the certificate we head over to our Puppet server and call
     uranus$ sudo puppet cert --list
       "ganglia.fritz.box"  (SHA256) C8:14:9A:2D:D6:5A:75:44:48:82:EA:D2:09:19:47:80:27:2A:C5:21:A4:D6:43:89:47:49:2D:1F:AC:94:F4:04 
       
-to look for waiting certificates. To certify the request we issue
+to look for waiting certificates. To sign the requested certificate we issue
 
     uranus$ sudo puppet cert sign ganglia.fritz.box
 
@@ -214,8 +214,8 @@ command
 
 Ganglia is collecting data from servers and can display them in a Ganglia web
 interface. On the Ganglia server we need to install *ganglia-webfrontend* and 
-*gmetad*. *ganglia-webfrontend* will also install *gmetad*. *gmetad* collects 
-the data from the server and *ganglia-webfrontend* displays the data. 
+*gmetad*. *ganglia-webfrontend* will also install *ganglia-monitor*. *gmetad* 
+collects the data from the server and *ganglia-webfrontend* displays the data. 
 *ganglia-monitor*, respectively the containing application *gmond* is collecting
 data on the servers and provides them to *gmetad*. That is every server we
 want to collect data from we need to install *ganglia-monitor* on. As we want 
@@ -248,7 +248,7 @@ and create a file `install.pp` in that directory with following content
     }
 
 In order the `ganglia::server::install` class gets invoked we have to add a 
-respective node to `/etc/puppet/manifests/site.pp`
+the class of the respective node to `/etc/puppet/manifests/site.pp`
 
     node 'ganglia.fritz.box' {
       include ::ganglia::server
@@ -332,6 +332,7 @@ To configure *gmond* we have to make some changes to *gmond.conf* as follows.
 The configuration of *gmetad* has to be done in *gmetad.conf* as outlined below.
 
 * Add a data source for each cluster
+* Add a grid name
 
 Before we move on some background information about the connection between
 *gmond* and *gmetad*. *gmond* sends and accepts, over the UDP send and receive
@@ -380,12 +381,12 @@ is in *tcp_accept_channel*.
     }
 
 Note: All servers that belong to the same cluster have to use the same 
-configuration as show above. That is the multicast IP address and the port.
+configuration as shown above. That is the multicast IP address and the port.
 
 At this point we are done with *gmond* configuration. We can do additional
-configuration changes but to get monitoring running this is all we need. This 
-we have to do on each server we want to collect metrics from. Now head over to 
-the *gmetad* configuration.
+configuration changes but to get monitoring running this is all we need. The 
+previous steps have to be done on each server we want to collect metrics from. 
+Now head over to the *gmetad* configuration.
 
 #### Configure *gmetad*
 We now work in `/etc/ganglia/gmetad.conf` where we need to make following 
@@ -447,10 +448,10 @@ If everything works we want to manage these files with Puppet. We copy these
 files to the Ganglia Puppet module in the files directory on our Puppet server.
 
 #### Manage Ganglia Configuration Files with Puppet
-We have to manage the Ganglia server and the servers (clients) we want to 
-monitor based on gathered metrics. We first look at how to manage the Ganglia
-server and in the next section we look at the clients, that is servers we 
-gather metrics from.
+We have to manage the Ganglia server (running *gmetad*) and the servers 
+(clients running *gmond*) we want to monitor based on gathered metrics. We 
+first look at how to manage the Ganglia server and in the next section we look 
+at the clients, that is servers we gather metrics from.
 
 ##### Configure the Ganglia Server
 First we copy *gmond.conf* and *gmetad.conf* from our Ganglia server to our
@@ -467,9 +468,9 @@ directory doesn't exist yet we create it with
 and copy *gmetad.conf* to `/etc/puppet/modules/ganglia/files/gmetad-server.conf`
 
     uranus$ cp ~/gmetad.conf \
-                /etc/puppet/modules/ganglia/files/metad-server.conf
+                /etc/puppet/modules/ganglia/files/metad.conf
 
-and we copy *gmondd.conf* to `/etc/puppet/modules/ganglia/files/gmond.conf`
+and we copy *gmond.conf* to `/etc/puppet/modules/ganglia/files/gmond.conf`
 
     uranus$ cp ~/gmond.conf /etc/puppet/modules/ganglia/files/gmond.conf
 
@@ -523,23 +524,22 @@ cluster.
 
 Next we want to collect metrics from our servers *uranus* and *mercury*.
 
-##### Configure the Monitored Clients
+##### Configure the Monitored Servers
 To configure the monitored servers is rather easy. We have to decide to which
-cluster a server belongs to and add this cluster to *gemeta.conf* on the 
+cluster a server belongs to and add this cluster to *gmetad.conf* on the 
 Ganglia server. On the client we have to install *gmond* and configure 
 *gmond.conf*.
 
 On the Puppet server *uranus* we create for each cluster a *gmond-CLUSTER.conf*
 file where *CLUSTER* has to be replaced by the cluster name. At the moment we 
 have the cluster *Monitoring*. An overview of the clusters we want to maintain 
-is show in the following table.
+is shown in the following table.
 
 Cluster        | Server  | Port | Description                                  
 -------------- | ------- | -----| -------------------------------------------- 
 Monitoring     | ganglia | 8649 | Hosting the Ganglia server                   
 Monitoring     | nagios  | 8649 | Hosting the Nagios server                    
-Staging        | uranus  | 8653 | Hosting Secondhand Staging and non critical
-               |         |      | applications
+Staging        | uranus  | 8653 | Hosting Secondhand Staging and non critical applications
 Production     | mercury | 8654 | Hosting the Secondhand Production application
 Infrastructure | earth   | 8655 | NAS server  
 
@@ -798,7 +798,7 @@ And finally we add the server nodes to `/etc/puppet/manifests/site.pp`
       include "ganglia::infrastructure"
     }
 
-Now we run puppet on each server. If is asumed that each of the servers has
+Now we run puppet on each server. It is asumed that each of the servers has
 installed and configured Puppet client. How to do that can be looked up in
 [Install Puppet](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#install-puppet)
 and in [Configure Puppet Client](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#prepare-the-client)
@@ -817,9 +817,9 @@ Ganglia server about the new clusters. We add the new clusters as data resources
 to `/etc/puppet/modules/ganglia/files/gmetad.conf`.
 
     data_source monitoring localhost:8649 nagios.fritz.box:8649
-    data_source production mercury.fritz.box:8652
+    data_source production mercury.fritz.box:8654
     data_source staging uranus.fritz.box:8653
-    data_source infrastructure earth.fritz.box:8654
+    data_source infrastructure earth.fritz.box:8655
 
 If we go to [localhost:4568/ganglia](http://localhost:4568/ganglia) we should
 see 4 clusters continuousy showing metrics.
@@ -832,7 +832,7 @@ located.
 File        | Path                     | Description
 ----------- | ------------------------ | -----------
 gmetad.conf | /etc/ganglia/            | Collecting data from servers by talking to gmond. Has to be installed on the Ganglia server
-gmond.conf  | /etc/ganglia/            | Collecting metrics from servers and sending them to gmetad. Has to be installed on the Ganlia server and clients
+gmond.conf  | /etc/ganglia/            | Collecting metrics from servers and sending them to gmetad. Has to be installed on the Ganlia server and monitored servers
 apache.conf | /etc/ganglia-webfrontend | Apache configuration file for Ganglia's web interface. Has to be linked to /etc/apache2/conf-enabled/
 
 Trouble Shooting
@@ -845,7 +845,7 @@ you come across.
 * Node (*gmond*) is not sending data
 * Node (*gmond*) is sending data but it is not receveived by *gmetad*
 
-There several tools that help to analyze the problem.
+There are several tools that help to analyze the problem.
 
 * `ifconfig` to check which interfaces are available
 * `netstat -g` to see whether the node is in a multicast group
@@ -858,9 +858,13 @@ There several tools that help to analyze the problem.
 * `/var/log/auth.log` to see which user is accessing which appliations
 * `gmond` and `gmetad` running in debug mode to check for errors
 
+The following error analysis strategies are inspired by the excellent 
+[blog](http://hakunamapdata.com/ganglia-configuration-for-a-small-hadoop-cluster-and-some-troubleshooting/) 
+from Adam Kawa.
+
 Cluster doens't show all nodes in the web interface
 ---------------------------------------------------
-Event though data gets send by `gmond` it doesn't arrive at the Ganglia server.
+Even though data gets send by `gmond` it doesn't arrive at the Ganglia server.
 If you have more than one interface you might sending from the wrong interface.
 If you are using multicast then you can check whether your node is in a 
 multicast group with
@@ -898,7 +902,7 @@ Next check the interfaces with
               collisions:0 txqueuelen:1000
               RX bytes:807186 (807.1 KB)  TX bytes:822338 (822.3 KB)
 
-We can see we have two interfaces that are poth capable of sending multicast. We
+We can see we have two interfaces that are both capable of sending multicast. We
 have to send the data over the IP address that is configured in `gmetad.conf`.
 In this case the only address that is visible to other hosts is 
 *192.168.178.111* which is *eth1*. If `gmond` sends over *eth0* we have to 
@@ -926,10 +930,9 @@ If you don't see any data then check the interface *eth1*
     08:28:03.325125 IP 192.168.178.120.50833 > 239.2.11.71.8649: UDP, length 48
     08:28:03.332437 IP nagios.43492 > 239.2.11.71.8649: UDP, length 48
 
-As we can see data is send over *eth1*. In this case we have to add the IP 
+As we can see data is sent over *eth1*. In this case we have to add the IP 
 *192.168.178.111* to the `data_source` definition in the `gmetad.conf`
 configuration file.
-
 
 Web interface is showing page with *fsckopen error*
 ---------------------------------------------------
@@ -951,7 +954,7 @@ Cluster doens't show all nodes in the web interface]()). You can also check
 whether you are able to send data over the port *8649*. This can be done with
 `netcat`.
 
-If node1 is configured with `udp_recv_channel` so it will receive data start
+If node1 is configured with `udp_recv_channel` so it should receive data. Start
 `netcat -lup 8649` this will listen (-l) on UDP connection (-u) on port (-p)
 8649.
 
@@ -1000,11 +1003,11 @@ To see if the rules are set you can issue `sudo iptables -L`.
 
 Node (*gmond*) is sending data but it is not receveived by *gmetad*
 -------------------------------------------------------------------
-In this case check whether you have
+In this case check whether 
 
 * `gmetad` is running
-* configured a `data_source` in `gemtad.conf` with the node and the correct IP 
-  address and port
+* the `data_source` in `gemtad.conf` with the node and the correct IP 
+  address and port is configured
 * `gmond` is sending on an interface with a public IP address
 
 Resources
