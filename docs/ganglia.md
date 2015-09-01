@@ -38,7 +38,7 @@ The software packages we will use during setting up Ganglia are listed below.
 * Git
 * tmux
 
-We asume that VirtualBox, Vagrant and Puppet (client/server) are already 
+We assume that VirtualBox, Vagrant and Puppet (client/server) are already 
 installed and setup. A walk through how to do this can be found at
 [Monitoring an Application with Nagios](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md).
 
@@ -153,7 +153,7 @@ to look for waiting certificates. To sign the requested certificate we issue
     uranus$ sudo puppet cert sign ganglia.fritz.box
 
 Back on our Ganglia server issuing the command should indicate that our 
-certification request has been aproved.
+certification request has been approved.
 
     ganglia$ sudo puppet agent --test
     Info: Caching certificate for ganglia.fritz.box
@@ -168,7 +168,7 @@ The last line says to run
     ganglia$ puppet agent --enable
 
 Then another run of `sudo puppet agent --test` will show an error that the 
-catalog could not be found. But that is o.k. for now as we don't have a module
+catalog could not be found. But that is OK. for now as we don't have a module
 yet.
 
     ganglia$ puppet agent --test
@@ -373,7 +373,7 @@ in. Search for *udp_recv_channel {* and add this content.
       bind = 239.2.11.71
     }
 
-We have to define a port over that *gmetad* can communicate with *gmond*. this
+We have to define a port over that *gmetad* can communicate with *gmond*. This
 is in *tcp_accept_channel*.
 
     tcp_accept_channel {
@@ -798,7 +798,7 @@ And finally we add the server nodes to `/etc/puppet/manifests/site.pp`
       include "ganglia::infrastructure"
     }
 
-Now we run puppet on each server. It is asumed that each of the servers has
+Now we run puppet on each server. It is assumed that each of the servers has
 installed and configured Puppet client. How to do that can be looked up in
 [Install Puppet](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#install-puppet)
 and in [Configure Puppet Client](https://github.com/sugaryourcoffee/monitoring/blob/master/docs/monitoring.md#prepare-the-client)
@@ -822,7 +822,7 @@ to `/etc/puppet/modules/ganglia/files/gmetad.conf`.
     data_source infrastructure earth.fritz.box:8655
 
 If we go to [localhost:4568/ganglia](http://localhost:4568/ganglia) we should
-see 4 clusters continuousy showing metrics.
+see 4 clusters continuously showing metrics.
 
 Configuration Files
 ===================
@@ -843,7 +843,7 @@ you come across.
 * Cluster doesn't show all nodes in web interface
 * Web interface is showing page with *fsckopen error*
 * Node (*gmond*) is not sending data
-* Node (*gmond*) is sending data but it is not receveived by *gmetad*
+* Node (*gmond*) is sending data but it is not received by *gmetad*
 
 There are several tools that help to analyze the problem.
 
@@ -855,14 +855,14 @@ There are several tools that help to analyze the problem.
 * `tcpdump` to check that data is actually send
 * `gstat` to see whether the metrics of a cluster are collected at a node that
   represents the node
-* `/var/log/auth.log` to see which user is accessing which appliations
+* `/var/log/auth.log` to see which user is accessing which applications
 * `gmond` and `gmetad` running in debug mode to check for errors
 
 The following error analysis strategies are inspired by the excellent 
 [blog](http://hakunamapdata.com/ganglia-configuration-for-a-small-hadoop-cluster-and-some-troubleshooting/) 
 from Adam Kawa.
 
-Cluster doens't show all nodes in the web interface
+Cluster doesn't show all nodes in the web interface
 ---------------------------------------------------
 Even though data gets send by `gmond` it doesn't arrive at the Ganglia server.
 If you have more than one interface you might sending from the wrong interface.
@@ -950,7 +950,7 @@ there are error messages in regard to `gmetad`.
 Node (*gmond*) is not sending data
 ----------------------------------
 A problem might be that the wrong interface is used (see [
-Cluster doens't show all nodes in the web interface]()). You can also check
+Cluster doesn't show all nodes in the web interface]()). You can also check
 whether you are able to send data over the port *8649*. This can be done with
 `netcat`.
 
@@ -1001,7 +1001,7 @@ If you don't see any output you may open the port 8649 with `iptables`.
 
 To see if the rules are set you can issue `sudo iptables -L`.
 
-Node (*gmond*) is sending data but it is not receveived by *gmetad*
+Node (*gmond*) is sending data but it is not received by *gmetad*
 -------------------------------------------------------------------
 In this case check whether 
 
